@@ -8,16 +8,16 @@ The wrapper works by taking the initial command line invoked for nfdump and brea
 
 The syntax of certain nfdump parameters lend themselves to being broken into smaller pieces. Look at the man page for nfdump at the -t and the -M parameters. Also check out the -w parameter. Using this information I create multiple lines of nfdump commands that can be run in parallel. The binary results are saved in intermediate files. Then I run the original command against the intermediate files. The initial multi line nfdump commands are run using GNU parallel. The final pass is run against the intermediate binary results. The initial size of data could be many hundreds of gigabytes. The intermediate file size will be much smaller and as a result run very fast.
 
-Prequisite Perl Modules:
-Getopt::Long
-Date::Format
-Time::Local
-File::Basename
-File::chdir
-File::Path
-File::Remove
-Data::Dump
-Cwd
+Prequisite Perl Modules:<BR>
+Getopt::Long<BR>
+Date::Format<BR>
+Time::Local<BR>
+File::Basename<BR>
+File::chdir<BR>
+File::Path<BR>
+File::Remove<BR>
+Data::Dump<BR>
+Cwd<BR>
 
 Prequisite Software:
 
