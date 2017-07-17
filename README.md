@@ -34,6 +34,7 @@ To transparently invoke the wrapper, rename the current nfdump file, and replace
 Make locations for the perl script and the log data.<BR>
 mkdir /usr/local/nfdumpWrapper<BR>
 mkdir /usr/local/nfdumpWrapper/log<BR>
+mkdir /usr/local/nfdumpWrapper/logtest<BR>
 <BR>
 Copy the wrapper to the new location.<BR>
 cp NFDump-wrapper.pl /usr/local/nfdumpWrapper<BR>
@@ -41,14 +42,15 @@ cp NFDump-wrapper.pl /usr/local/nfdumpWrapper<BR>
 Make sure the wrapper is executable.<BR>
 chmod 755 /usr/local/nfdumpWrapper/NFDump-wrapper.pl<BR>
 <BR>
-Now, hide the original nfdump my renaming it and prefixing a dot to the name.<BR>
+Now, hide the original nfdump by renaming it and prefixing a dot to the name making it a hidden file.<BR>
 mv /usr/local/bin/nfdump /usr/local/bin/.nfdump<BR>
 <BR>
 Put the wrapper in place of nfdump by linking to the original location.<BR>
 ln -s /usr/local/nfdumpWrapper/NFDump-wrapper.pl /usr/local/bin/nfdump<BR>
 <BR>
-Make sure that the log location can be written to. Do this however you like. I know 777 is not preferred.<BR>
+Make sure that the log locations can be written to. Do this however you like. I know 777 is not preferred.<BR>
 chmod 777 /usr/local/nfdumpWrapper/log<BR>
+chmod 777 /usr/local/nfdumpWrapper/logtest<BR>
 <BR>
 <B>Possible problems:</B><BR>
 I encountered a situation where the httpd process runs in a protected space. In that space there is a private tmp directory. The httpd process thinks this is a root based /tmp location. I did not figure this out initially, so when I did find a solution I took the easy way out. The system I run this on is Red Hat 7. The httpd process creates a protected directory in /tmp using a long convoluted name. Maybe you have seen and wondered what that was for. I ignored it until it prevented me from doing what I needed.<BR>
@@ -78,6 +80,9 @@ systemctl start nagiosna<BR>
 At this time, the httpd locked down directory in /tmp should be gone.<BR>
 <BR>
 The perl script can now use /tmp to make intermediate files and queue files. I should clean up after itself.<BR>
+<BR>
+<B>To Do:</B><BR>
+Make an install script.<BR>
 <BR>
 <B>Information:</B><BR>
 http://nfdump.sourceforge.net/<BR>

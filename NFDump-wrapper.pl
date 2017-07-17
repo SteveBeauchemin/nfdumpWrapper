@@ -95,7 +95,7 @@ my @TimeList;
 # basename of nfdump means we are being used by a 3rd part app
 if (basename($0) =~ m/nfdump/) {
   #$LOG = $BASEDIR . "log/nfdump.log";
-  $LOG = $BASEDIR . "logtest/testing-nfdump.log";
+  $LOG = $BASEDIR . "log/nfdump.log";
   # 3rd party app would be confused if we output extra information so turn off DEBUG
   $DEBUG=0;
 } else {
