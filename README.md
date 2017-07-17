@@ -27,9 +27,15 @@ From <BR>
 Installation:<BR>
 To transparently invoke the wrapper, rename the current nfdump file, and replace it with the wrapper script. I did this as follows. Feel free to improvise. I did.<BR>
 <BR>
-Make a location for the perl script.<BR>
+Make locations for the perl script and the log data.<BR>
 mkdir /usr/local/nfdumpWrapper<BR>
 mkdir /usr/local/nfdumpWrapper/log<BR>
+<BR>
+Copy the wrapper to the new location.<BR>
+cp NFDump-wrapper.pl /usr/local/nfdumpWrapper<BR>
+<BR>
+Make sure the wrapper is executable.<BR>
+chmod 755 /usr/local/nfdumpWrapper/NFDump-wrapper.pl<BR>
 <BR>
 Now, hide the original nfdump my renaming it and prefixing a dot to the name.<BR>
 mv /usr/local/bin/nfdump /usr/local/bin/.nfdump<BR>
@@ -41,13 +47,12 @@ Make sure that the log location can be written to. Do this however you like. I k
 chmod 777 /usr/local/nfdumpWrapper/log<BR>
 <BR>
 Possible problems:<BR>
-I encountered a situation where the httpd process runs in a protected space. I that space it has a private /tmp location. I did not figure this out initially, so when I did find a solution I took the easy way out. The system I run this on is Red Hat 7. The httpd process creates a protected directory in /tmp. Maybe you have seen and wondered what that was for. I ignored it until it prevented me from doing what I needed.<BR>
+I encountered a situation where the httpd process runs in a protected space. In that space there is a private tmp directory. The httpd process thinks this is a root based /tmp location. I did not figure this out initially, so when I did find a solution I took the easy way out. The system I run this on is Red Hat 7. The httpd process creates a protected directory in /tmp using a long convoluted name. Maybe you have seen and wondered what that was for. I ignored it until it prevented me from doing what I needed.<BR>
 <BR>
 In the /tmp directory you will see information like this:<BR>
 drwx------ 3 root root 16 Jun 15 04:58 systemd-private-03d2c892c043485883d4e9e39bcd699a-httpd.service-V47y1Q<BR>
-drwx------ 3 root root 16 Jun 15 04:57 systemd-private-03d2c892c043485883d4e9e39bcd699a-ntpd.service-gsx5YF<BR>
 <BR>
-In the /tmp directory with httpd in the name is another tmp directory that is the protected space. I found that it was difficult to deal with files hidden there and decided to run httpd in unprotected space. This was done as follows:<BR>
+In that directory with httpd in the name is another tmp directory that is the protected space. I found that it was difficult to deal with files hidden there and decided to run httpd in unprotected space. This was done as follows:<BR>
 cp /usr/lib/systemd/system/httpd.service /etc/systemd/system/httpd.service<BR>
 vi /etc/systemd/system/httpd.service<BR>
 Change the line from<BR>
@@ -55,10 +60,10 @@ PrivateTmp=true<BR>
 to<BR>
 PrivateTmp=false<BR>
 <BR>
-Then tell the OS that you changed a startup file<BR>
+Tell the OS that you changed a startup file.<BR>
 systemctl daemon-reload<BR>
 <BR>
-Then, stop and start httpd<BR>
+Stop and start httpd<BR>
 systemctl stop httpd.service<BR>
 systemctl start httpd.service<BR>
 <BR>
