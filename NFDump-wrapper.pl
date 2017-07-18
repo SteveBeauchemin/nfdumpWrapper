@@ -709,7 +709,7 @@ sub runFinalPass() {
     if ($filter) {
       $command .= " -R \'$range\' -t \'$opt_t\' \'$filter\'";
     } else {
-      $command .= "-R \'$range\' -t \'$opt_t\'";
+      $command .= " -R \'$range\' -t \'$opt_t\'";
     }
     # run the command and let the output go to NNA
     print $OUTPUT "Running special nfdump to aggregate Intermediate file data\n";
