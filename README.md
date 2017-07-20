@@ -21,14 +21,21 @@ Cwd<BR>
 <B>Prequisite Software:</B><BR>
 GNU Parallel<BR>
 From:<BR>
-  https://www.gnu.org/software/parallel/<BR>
+https://www.gnu.org/software/parallel/<BR>
+Follow their simple install instructions. Nothing special.<BR>
 <BR>
-nfdump<BR>
+nfdump minimum Version 1.6.15 is required<BR>
 From:<BR>
 https://github.com/phaag/nfdump for version 1.6.15<BR>
-https://sourceforge.net/projects/nfdump/ for version 1.6.13<BR>
+Clone the source, and then follow these simple steps<BR>
+Change to the directory and run:<BR>
+autoreconf -if<BR>
+./configure --enable-nsel<BR>
+make<BR>
+make install<BR>
+Then stop NNA and httpd, and restart them. Make sure the nfcapd processes get stoped and are started with the new version.<BR>
 <BR>
-<B>Installation:</B><BR>
+<B>Wrapper Installation:</B><BR>
 To transparently invoke the wrapper, rename the current nfdump file, and replace it with the wrapper script. I did this as follows. Feel free to improvise. I did.<BR>
 <BR>
 Make locations for the perl script and the log data.<BR>

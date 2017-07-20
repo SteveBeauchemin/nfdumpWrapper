@@ -15,7 +15,7 @@ use Date::Format;
 use Time::Local;
 use File::Basename;
 use File::chdir;
-use File::Path;
+use File::Path qw(make_path remove_tree);
 use File::Remove 'remove';
 use Data::Dump 'dump';
 use Cwd 'abs_path';
@@ -25,13 +25,13 @@ use Cwd 'abs_path';
 # This is handy if you simply want to log the syntax that any application is sending to nfdump.
 # false means to never run GNU parallel code and just pass the nfdump command syntax with no changes.
 # true means make use of GNU parallel.
-#my $MasterPass = "false";
-my $MasterPass = "true";
+#my $MasterPass = "true"; # we need to not use the wrapper at this time for various and sundry reasons
+my $MasterPass = "false"; # we will not simply pass through - we are gonna try to use parallel processing
 
 ## There is log data keps for each run so the syntax can be examined. So see VERBOSE log data change the following
 # variable to true
 #my $Verbose = "true";
-my $Verbose;
+my $Verbose = "true";
 
 # Set a default multiplier for time intervals
 # setting a default of 1 hour - if you change this, test the output using debug to make sure you like the result
@@ -42,12 +42,17 @@ my $interval = "1";
 my $BASEDIR = "/usr/local/nfdumpWrapper/";
 # Put temporary files here - They should get cleaned out on a regular basis
 # automatically by the program. Maybe sneak in a time stamp check in the cleanup just in case.
-#my $QUEDIR = "/var/tmp/parallelqueue/";
-#my $QUEDIR = "/tmp/parallelqueue/";
-my $QUEDIR = "/tmp/";
-#my $TMPDIR = "/var/tmp/nfdumptemp/";
-#my $TMPDIR = "/tmp/nfdumptemp/";
-my $TMPDIR = "/tmp/";
+my $QUEDIR = "/tmp/nfdqueue/";
+my $TMPDIR = "/tmp/nfdtemp/";
+
+# check for temporary directories - make them if needed
+# Note: we will make other directories inside nfdtemp
+if ( ! -d $QUEDIR ) {
+  make_path($QUEDIR, { mode => 0755 });
+}
+if ( ! -d $TMPDIR ) {
+  make_path($TMPDIR, { mode => 0755 });
+}
 
 # Make sure that this is the actual nfdump binary as the
 # real nfdump is renamed to .nfdump
@@ -55,20 +60,14 @@ my $command = "/usr/local/bin/.nfdump";
 
 # ================================================================= No USER modifiable parameters below here
 # I hope
-my $LOG;
-my $NFDLOCATION = "";
-my $DEBUG;
-my $quefile = "";
-my $counter = "1";
 
-#
 ## Conditional on off
 # Some commands should not be run as a parallel process.
 # Define here whether we are simply passing through the command,
 # or are we using GNU parallel to make nfdump more efficient.
 # A value of false is the necessary default and will be changed
 # automatically as needed if a parameter in use will benefit.
-my $passthru = "false"; # using parallel processing
+my $passthru = "false"; # we will not simply pass through - we are gonna be using parallel processing
 
 ## Some parameters allow for nfdump to create intermediate files. This makes using parallel much easier.
 # If the -a -A -b or -B are used, then we can use -w [outfile]. What this means is that we can use parallel and
@@ -91,10 +90,16 @@ my $filter = "";
 my @DirList;
 my @TimeList;
 
+# Make other variable that need access by multiple subroutines
+my $LOG;
+my $DEBUG;
+my $NFDLOCATION = "";
+my $quefile = "";
+my $counter = "1";
+
 # Detect how the wrapper is invoked
 # basename of nfdump means we are being used by a 3rd part app
 if (basename($0) =~ m/nfdump/) {
-  #$LOG = $BASEDIR . "log/nfdump.log";
   $LOG = $BASEDIR . "log/nfdump.log";
   # 3rd party app would be confused if we output extra information so turn off DEBUG
   $DEBUG=0;
@@ -167,16 +172,12 @@ if ($opt_R) {
   # constructing the nfdump command line -R
   print " -R \'$opt_R\'" if $DEBUG;
   #$command .= " -R \'$opt_R\'";
-  # Use parallel processing - do not simply pass through to nfdump
-  $passthru = "false";
 }
 
 if ($opt_M) {
   # constructing the nfdump command line -M
   print " -M \'$opt_M\'" if $DEBUG;
   #$command .= " -M \'$opt_M\'";
-  # Use parallel processing - do not simply pass through to nfdump
-  $passthru = "false";
 }
 
 if ($opt_O) {
@@ -189,10 +190,6 @@ if ($opt_w) {
   # constructing the nfdump command line -w
   print " -w \'$opt_w\'" if $DEBUG;
   $command .= " -w \'$opt_w\'";
-  # if the -w is passed as a parameter then something unusual is being requested so
-  # lets become invisible and just run the nfdump syntax we are sent. 
-  # Entering Master Pass Thru mode...
-  $MasterPass = "false";
 }
 
 if ($opt_f) {
@@ -205,14 +202,9 @@ if ($opt_t) {
   # constructing the nfdump command line -t
   print " -t \'$opt_t\'" if $DEBUG;
   #$command .= " -t \'$opt_t\'";
-  # Use parallel processing - do not simply pass through to nfdump
-  $passthru = "false";
 }
 
 if ($opt_c) {
-  # Introduce a small delay here to prevent multiple NNA queries from running in the same dir space
-  # This happens when using the tab Nagios XI and it makes 2 requests to NNA at the same exact second
-  sleep(2);
   # constructing the nfdump command line -c
   print " -c \'$opt_c\'" if $DEBUG;
   $command .= " -c \'$opt_c\'";
@@ -222,52 +214,24 @@ if ($opt_a) {
   # constructing the nfdump command line -a
   print " -a" if $DEBUG;
   $command .= " -a";
-  # This parameter implies that we can use Parallel and an Intermediate directory
-  $passthru = "false";
-  $useoutfile = "true";
 }
 
 if ($opt_A) {
   # constructing the nfdump command line -A
   print " -A \'$opt_A\'" if $DEBUG;
   $command .= " -A \'$opt_A\'";
-  # This parameter implies that we can use Parallel and an Intermediate directory
-  $passthru = "false";
-  $useoutfile = "true";
-  # In the GUI if you run a Report - and then click on a hyperlink to see by port
-  # the system runs a Query that generates many pages but fails until I fix the Top Talker
-  # and then this will be similar.
-  #my ($tst1,$tst2)=split(",",$opt_A);
-  #if (($tst1 eq "srcport") && ($tst2 eq "dstport")) {
-  #  $MasterPass = "false";
-  #}
-  #if (($tst1 eq "srcip") && ($tst2 eq "srcport")) {
-  #  $MasterPass = "false";
-  #}
-  #if (($tst1 eq "srcip") && ($tst2 eq "dstip")) {
-  #  $MasterPass = "false";
-  #}
-  #if (($tst1 eq "dstip") && ($tst2 eq "srcip")) {
-  #  $MasterPass = "false";
-  #}
 }
 
 if ($opt_b) {
   # constructing the nfdump command line -b
   print " -b" if $DEBUG;
   $command .= " -b";
-  # This parameter implies that we can use Parallel and an Intermediate directory
-  $passthru = "false";
-  $useoutfile = "true";
 }
 
 if ($opt_B) {
   # constructing the nfdump command line -B
   print " -B" if $DEBUG;
   $command .= " -B";
-  # This parameter implies that we can use Parallel and an Intermediate directory
-  $passthru = "false";
-  $useoutfile = "true";
 }
 
 if ($opt_I) {
@@ -304,9 +268,6 @@ if ($opt_n) {
   # constructing the nfdump command line -n
   print " -n \'$opt_n\'" if $DEBUG;
   $command .= " -n \'$opt_n\'";
-  # The query is for Top Talker data, so if we run parallel we need to merge the data, 
-  # sort it, add it, whatever it takes to format it as if it were a single query.
-  $toptalker = "true";
 }
 
 if ($opt_o) {
@@ -373,8 +334,6 @@ if ($opt_Z) {
   # constructing the nfdump command line -Z
   print " -Z" if $DEBUG;
   $command .= " -Z";
-  # Do not use using parallel processing as this is just a syntax verification
-  $MasterPass = "false";
 }
 
 if ($opt_X) {
@@ -402,6 +361,40 @@ if ($filter) {
   #$command .= " \'$filter\'";
 }
 
+# ===========================================================================================
+## Make pass through decisions here - use proper judgement when selecting order of precedence
+#
+if ($opt_c) {
+  # Introduce a small delay here to prevent multiple NNA queries from running in the same dir space
+  # This happens when using the tab Nagios XI and it makes 2 requests to NNA at the same exact second
+  # Since we use a time stamp in the code we need to make sure that the times are different.
+  sleep(2);
+}
+if (($opt_t) || ($opt_M) || ($opt_R)) {
+  # These are good candidates for use of parallel processing - do not simply pass through to nfdump
+  $passthru = "false";
+}
+if (($opt_B) || ($opt_b) || ($opt_A) || ($opt_a)) {
+  # This parameter implies that we can use Parallel and an Intermediate directory
+  $passthru = "false";
+  $useoutfile = "true";
+}
+if (($opt_n) || ($opt_c)) {
+  # The query is for Top Talker data, so if we run parallel we need to merge the data, 
+  # sort it, add it, whatever it takes to format it as if it were a single query.
+  # code is in process...
+  $toptalker = "true";
+}
+if (($opt_Z) || ($opt_w)) {
+  # if the -Z is passed then we are just doing a syntax check
+  # if the -w is passed as a parameter then something unusual is being requested so
+  # lets become invisible and just run the nfdump syntax we are sent.
+  # Entering Master Pass Thru mode...
+  $MasterPass = "true";
+}
+# ===========================================================================================
+
+
 print "\n\n" if $DEBUG;
 
 # ===============================================================
@@ -422,7 +415,7 @@ if ($opt_t) {
 if ($filter) {
   $logcmd .= " \'$filter\'";
 }
-my $eventtime = time2str("%Y-%m-%d %I:%M %p %Z", time);
+my $eventtime = time2str("%Y-%m-%d %I:%M:%S %p %Z", time);
 
 # Write the nfdump syntax in an untouched state.
 open(my $OUTPUT, '>>', $LOG);
@@ -438,13 +431,13 @@ print $OUTPUT "$logcmd\n\n" if $Verbose;
 # set a time that all parts of this run will use
 my $tstamp = time;
 
-if ($MasterPass eq "false") {
+if ($MasterPass eq "true") {
   # IF false, then skip all  further efforts as we are not enabled.
   # So just run the nfdump command as submitted with no performance improvements
   # Use the logcmd from above as this represents unmodified input
   system($logcmd) unless $DEBUG;
-  print "MasterPass false mode in effect - We would have run - $logcmd\n" if $DEBUG;
-  print $OUTPUT "MasterPass false mode in effect - We would have run - $logcmd\n\n";
+  print "MasterPass true mode in effect - We would have run\n$logcmd\n" if $DEBUG;
+  print $OUTPUT "MasterPass true mode in effect - We would have run\n$logcmd\n\n";
   close $OUTPUT;
 } else {
   # We are globally enabled and will enhance performance based on the parameters submitted to nfdump
@@ -481,6 +474,7 @@ if ($MasterPass eq "false") {
     #
     if (($dircount eq "1") && ($timecount eq "1") || ($toptalker eq "true")) {
       # each is one item long so just run the nfdump command
+      # as for Top Talkers, skip it for now until we solve that puzzle
       system($logcmd) unless $DEBUG;
       print "No Parallel needed - one dir and one timelist - Or Top Talker is asked for\n" if $DEBUG;
       print "We would have run\n$logcmd\n\n" if $DEBUG;
@@ -625,8 +619,10 @@ sub EpochToT($) {
 #-------------------------------------------------------------------------
 sub PreProcess() {
   if ($useoutfile eq "true") {
-    $NFDLOCATION = $TMPDIR;
-    print $OUTPUT "Using $TMPDIR as an  Intermediate directory $NFDLOCATION\n\n" if $Verbose;
+    #$NFDLOCATION = $TMPDIR;
+    $NFDLOCATION = $TMPDIR . "nfd." . $tstamp;
+    make_path($NFDLOCATION, { mode => 0755 });
+    print $OUTPUT "Using $TMPDIR as an  Intermediate directory for $NFDLOCATION\n\n" if $Verbose;
 
     print "Intermediate directory is $NFDLOCATION\n" if $DEBUG;
     if (! -e $NFDLOCATION) {
@@ -653,7 +649,8 @@ sub MakeQueueFile() {
       # if we can use an intermediate directory - then make up incremental file names
       if ($useoutfile eq "true") {
         my $filecounter = sprintf("%04d", $counter);
-        $extendparam = " -w \'" . $NFDLOCATION . "nfdfile." . $tstamp . "-" . $filecounter . "\'";
+        #$extendparam = " -w \'" . $NFDLOCATION . "nfdfile." . $tstamp . "-" . $filecounter . "\'";
+        $extendparam = " -w \'" . $NFDLOCATION . "/nfdfile." . $tstamp . "-" . $filecounter . "\'";
         $counter++;
       }
       if ($filter) {
@@ -703,13 +700,15 @@ sub runFinalPass() {
   # we just need to run nfdump a special way. so lets do that by getting the command syntax correctly set.
   print $OUTPUT "Starting a Final Pass\n\n" if $Verbose;
   if ($useoutfile eq "true") {
-    my $startcount = "0001";
-    my $endcount = sprintf("%04d", $counter);
-    my $range = $NFDLOCATION . "nfdfile." . $tstamp . "-" . $startcount . ":nfdfile." . $tstamp . "-" . $endcount;
+    #my $startcount = "0001";
+    #my $endcount = sprintf("%04d", $counter);
+    #my $range = $NFDLOCATION . "nfdfile." . $tstamp . "-" . $startcount . ":nfdfile." . $tstamp . "-" . $endcount;
     if ($filter) {
-      $command .= " -R \'$range\' -t \'$opt_t\' \'$filter\'";
+      #$command .= " -R \'$range\' -t \'$opt_t\' \'$filter\'";
+      $command .= " -R \'.\' -M \'$NFDLOCATION\' -t \'$opt_t\' \'$filter\'";
     } else {
-      $command .= " -R \'$range\' -t \'$opt_t\'";
+      #$command .= " -R \'$range\' -t \'$opt_t\'";
+      $command .= " -R \'.\' -M \'$NFDLOCATION\' -t \'$opt_t\'";
     }
     # run the command and let the output go to NNA
     print $OUTPUT "Running special nfdump to aggregate Intermediate file data\n";
@@ -724,21 +723,24 @@ sub RunCleanup() {
   #return;
   
   {
-    my $ctr = "0";
+    #my $ctr = "0";
     # Clean up nfdfile.* files in the $TMPDIR
-    $CWD = $TMPDIR;
+    #$CWD = $TMPDIR;
+    remove_tree($NFDLOCATION);
+    print $OUTPUT "removed intermediate location " . $NFDLOCATION  . "\n";
+    #print $OUTPUT "Would remove intermediate location " . $NFDLOCATION  . "\n";
     # to delete all nfdfiles and not the ones we just made
     #my $basefile = "nfdfile.*";
     # to delete just the nfdfiles we just made
-    my $basefile = "nfdfile." . $tstamp . "*";
-    print $OUTPUT "The file prefix for deletion is " . $basefile  . "\n";
-    my @nfdfilelist=<"$basefile">;
-    foreach my $del (@nfdfilelist) {
-      unlink $del;
-      $ctr++;
-      print $OUTPUT "Deleted the " . $del  . " file\n" if $Verbose;
-    }
-    print $OUTPUT "Removed  " . $ctr  . " files\n";
+    #my $basefile = "nfdfile." . $tstamp . "*";
+    #print $OUTPUT "The file prefix for deletion is " . $basefile  . "\n";
+    #my @nfdfilelist=<"$basefile">;
+    #foreach my $del (@nfdfilelist) {
+    #  unlink $del;
+    #  $ctr++;
+    #  print $OUTPUT "Deleted the " . $del  . " file\n" if $Verbose;
+    #}
+    #print $OUTPUT "Removed  " . $ctr  . " files\n";
   }
 
   {
