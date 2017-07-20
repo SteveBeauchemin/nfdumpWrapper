@@ -25,28 +25,30 @@ use Cwd 'abs_path';
 # This is handy if you simply want to log the syntax that any application is sending to nfdump.
 # false means to never run GNU parallel code and just pass the nfdump command syntax with no changes.
 # true means make use of GNU parallel.
-#my $MasterPass = "true"; # we need to not use the wrapper at this time for various and sundry reasons
+#my $MasterPass = "true"; # we need to NOT use the wrapper at this time for various and sundry reasons so turn it completely off
 my $MasterPass = "false"; # we will not simply pass through - we are gonna try to use parallel processing
 
-## There is log data keps for each run so the syntax can be examined. So see VERBOSE log data change the following
-# variable to true
-#my $Verbose = "true";
+## There is log data kept for each run so the syntax can be examined. 
+# To see VERBOSE log data change the following variable to true
+#my $Verbose = "false";
 my $Verbose = "true";
 
 # Set a default multiplier for time intervals
 # setting a default of 1 hour - if you change this, test the output using debug to make sure you like the result
+# I like it set to 1. It works for me.
 my $interval = "1";
 
 # define location variables
 # Install the wrapper here
 my $BASEDIR = "/usr/local/nfdumpWrapper/";
-# Put temporary files here - They should get cleaned out on a regular basis
-# automatically by the program. Maybe sneak in a time stamp check in the cleanup just in case.
+# Put temporary files here
+# They should get cleaned out on a regular basis automatically by the program. 
+# Maybe sneak in a time stamp check in the cleanup just in case. Delete old stuff...
 my $QUEDIR = "/tmp/nfdqueue/";
 my $TMPDIR = "/tmp/nfdtemp/";
 
 # check for temporary directories - make them if needed
-# Note: we will make other directories inside nfdtemp
+# Note: we will make other directories inside  the nfdtemp location
 if ( ! -d $QUEDIR ) {
   make_path($QUEDIR, { mode => 0755 });
 }
@@ -54,8 +56,8 @@ if ( ! -d $TMPDIR ) {
   make_path($TMPDIR, { mode => 0755 });
 }
 
-# Make sure that this is the actual nfdump binary as the
-# real nfdump is renamed to .nfdump
+# Make sure that this is aimed at the actual nfdump binary as the
+# real nfdump is renamed to .nfdump or otherwise hidden somewhere
 my $command = "/usr/local/bin/.nfdump";
 
 # ================================================================= No USER modifiable parameters below here
@@ -207,7 +209,7 @@ if ($opt_t) {
 if ($opt_c) {
   # constructing the nfdump command line -c
   print " -c \'$opt_c\'" if $DEBUG;
-  $command .= " -c \'$opt_c\'";
+  #$command .= " -c \'$opt_c\'";
 }
 
 if ($opt_a) {
@@ -369,6 +371,10 @@ if ($opt_c) {
   # This happens when using the tab Nagios XI and it makes 2 requests to NNA at the same exact second
   # Since we use a time stamp in the code we need to make sure that the times are different.
   sleep(2);
+  # =============================================================================== <<<< This opt_c causes chord to not be run parallel for now.
+  # code is in process...
+  # May not be needed for Chord Diagrams... lets aggregate more flow data and see later.
+  $toptalker = "true";
 }
 if (($opt_t) || ($opt_M) || ($opt_R)) {
   # These are good candidates for use of parallel processing - do not simply pass through to nfdump
@@ -379,10 +385,9 @@ if (($opt_B) || ($opt_b) || ($opt_A) || ($opt_a)) {
   $passthru = "false";
   $useoutfile = "true";
 }
-if (($opt_n) || ($opt_c)) {
+if ($opt_n) {
   # The query is for Top Talker data, so if we run parallel we need to merge the data, 
   # sort it, add it, whatever it takes to format it as if it were a single query.
-  # code is in process...
   $toptalker = "true";
 }
 if (($opt_Z) || ($opt_w)) {
@@ -403,6 +408,9 @@ print "\n\n" if $DEBUG;
 
 # Save the initial command to a log file so we can examine syntax later
 my $logcmd = $command;
+if ($opt_c) {
+  $logcmd .= " -c \'$opt_c\'";
+}
 if ($opt_R) {
   $logcmd .= " -R \'$opt_R\'";
 }
@@ -484,14 +492,13 @@ if ($MasterPass eq "true") {
       # continue with the GNU parallel tasks
       #
       # Include any Pre Process commands or parameters
-      # Such as making a directory
+      # Such as making an intermediate directory - hint hint...
       print $OUTPUT "Will now run the sub PreProcess\n\n" if $Verbose;
       &PreProcess();
       #
       # write the parallel queue file using the arrays from above and any extended command syntax
       print $OUTPUT "Will now run the sub MakeQueueFile\n\n" if $Verbose;
       $quefile = &MakeQueueFile();
-      #&MakeQueueFile();
       print "queue File $quefile\n" if $DEBUG;
       print $OUTPUT "queue File $quefile\n\n" if $Verbose;
       # display the queue file so we can tell what would have run
@@ -511,7 +518,7 @@ if ($MasterPass eq "true") {
       print $OUTPUT "Will now run the sub RunCleanup for now\n\n" if $Verbose;
       #print $OUTPUT "NOT gonna run the sub RunCleanup for now\n\n";
       # Add a slight delay and allow files to finish any activity that may still be running
-      sleep(4);
+      sleep(2);
       &RunCleanup();
       #
     }
@@ -700,14 +707,9 @@ sub runFinalPass() {
   # we just need to run nfdump a special way. so lets do that by getting the command syntax correctly set.
   print $OUTPUT "Starting a Final Pass\n\n" if $Verbose;
   if ($useoutfile eq "true") {
-    #my $startcount = "0001";
-    #my $endcount = sprintf("%04d", $counter);
-    #my $range = $NFDLOCATION . "nfdfile." . $tstamp . "-" . $startcount . ":nfdfile." . $tstamp . "-" . $endcount;
     if ($filter) {
-      #$command .= " -R \'$range\' -t \'$opt_t\' \'$filter\'";
       $command .= " -R \'.\' -M \'$NFDLOCATION\' -t \'$opt_t\' \'$filter\'";
     } else {
-      #$command .= " -R \'$range\' -t \'$opt_t\'";
       $command .= " -R \'.\' -M \'$NFDLOCATION\' -t \'$opt_t\'";
     }
     # run the command and let the output go to NNA
