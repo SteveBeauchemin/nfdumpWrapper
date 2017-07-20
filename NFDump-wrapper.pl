@@ -8,6 +8,11 @@
 ## Created by Steve Beauchemin - sbeauchemin@gmail.com - 2017-06-28
 ##
 
+# Initial Release
+# Steven Beauchemin 2017-07-20
+# sbeauchemin@gmail.com
+# Version 1.0.0
+
 use strict; 
 use warnings; 
 use Getopt::Long qw(:config no_ignore_case);
@@ -155,7 +160,7 @@ GetOptions(
 # if any command line data is left over save it to filter
 if ($ARGV[0]) {
   foreach (@ARGV) {
-    $filter .= " $_";
+    $filter .= "$_";
   }
 }
 
@@ -374,7 +379,7 @@ if ($opt_c) {
   # =============================================================================== <<<< This opt_c causes chord to not be run parallel for now.
   # code is in process...
   # May not be needed for Chord Diagrams... lets aggregate more flow data and see later.
-  $toptalker = "true";
+  #$toptalker = "true";
 }
 if (($opt_t) || ($opt_M) || ($opt_R)) {
   # These are good candidates for use of parallel processing - do not simply pass through to nfdump
@@ -627,7 +632,7 @@ sub EpochToT($) {
 sub PreProcess() {
   if ($useoutfile eq "true") {
     #$NFDLOCATION = $TMPDIR;
-    $NFDLOCATION = $TMPDIR . "nfd." . $tstamp;
+    $NFDLOCATION = $TMPDIR . "nfd." . $tstamp . "/";
     make_path($NFDLOCATION, { mode => 0755 });
     print $OUTPUT "Using $TMPDIR as an  Intermediate directory for $NFDLOCATION\n\n" if $Verbose;
 
@@ -656,8 +661,7 @@ sub MakeQueueFile() {
       # if we can use an intermediate directory - then make up incremental file names
       if ($useoutfile eq "true") {
         my $filecounter = sprintf("%04d", $counter);
-        #$extendparam = " -w \'" . $NFDLOCATION . "nfdfile." . $tstamp . "-" . $filecounter . "\'";
-        $extendparam = " -w \'" . $NFDLOCATION . "/nfdfile." . $tstamp . "-" . $filecounter . "\'";
+        $extendparam = "-w \'" . $NFDLOCATION . "nfdfile." . $tstamp . "-" . $filecounter . "\'";
         $counter++;
       }
       if ($filter) {
@@ -707,6 +711,9 @@ sub runFinalPass() {
   # we just need to run nfdump a special way. so lets do that by getting the command syntax correctly set.
   print $OUTPUT "Starting a Final Pass\n\n" if $Verbose;
   if ($useoutfile eq "true") {
+    if ($opt_c) {
+      $command .= " -c \'$opt_c\'";
+    }
     if ($filter) {
       $command .= " -R \'.\' -M \'$NFDLOCATION\' -t \'$opt_t\' \'$filter\'";
     } else {
@@ -725,24 +732,8 @@ sub RunCleanup() {
   #return;
   
   {
-    #my $ctr = "0";
-    # Clean up nfdfile.* files in the $TMPDIR
-    #$CWD = $TMPDIR;
     remove_tree($NFDLOCATION);
     print $OUTPUT "removed intermediate location " . $NFDLOCATION  . "\n";
-    #print $OUTPUT "Would remove intermediate location " . $NFDLOCATION  . "\n";
-    # to delete all nfdfiles and not the ones we just made
-    #my $basefile = "nfdfile.*";
-    # to delete just the nfdfiles we just made
-    #my $basefile = "nfdfile." . $tstamp . "*";
-    #print $OUTPUT "The file prefix for deletion is " . $basefile  . "\n";
-    #my @nfdfilelist=<"$basefile">;
-    #foreach my $del (@nfdfilelist) {
-    #  unlink $del;
-    #  $ctr++;
-    #  print $OUTPUT "Deleted the " . $del  . " file\n" if $Verbose;
-    #}
-    #print $OUTPUT "Removed  " . $ctr  . " files\n";
   }
 
   {

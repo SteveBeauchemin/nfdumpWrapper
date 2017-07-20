@@ -3,6 +3,8 @@
 <BR>
 This is developed for use with Nagios Network Analyzer but should be easily expanded to work transparently with any application that invokes nfdump.<BR>
 <BR>
+Currently the wrapper works for all the provided data display except the Top Talkers. The Top Talker is on my list for later. In some cases the Chord Diagrams do not display properly and state "No Data". I have only seen that on Custom Queries that I made myself. In those cases it is possible that the output you are asking for is not able to be displayed. All the canned displays seem work with the wrapper.<BR>
+<BR>
 The wrapper works by taking the initial command line invoked for nfdump and breaking it into smaller tasks. These tasks can be run in parallel with each other, and the output aggregated to provide the initial requested data.<BR>
 <BR>
 The syntax of certain nfdump parameters lend themselves to being broken into smaller pieces. Look at the man page for nfdump at the -t and the -M parameters. Also check out the -w parameter. Using this information I create multiple lines of nfdump commands that can be run in parallel. The binary results are saved in intermediate files. Then I run the original command against the intermediate files. The initial multi line nfdump commands are run using GNU parallel. The final pass is run against the intermediate binary results. The initial size of data could be many hundreds of gigabytes. The intermediate file size will be much smaller and as a result run very fast.<BR>
