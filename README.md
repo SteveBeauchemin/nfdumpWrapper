@@ -44,10 +44,8 @@ Then stop NNA and httpd, and restart them. Make sure the nfcapd processes get st
 <B>Wrapper Installation:</B><BR>
 To transparently invoke the wrapper, rename the current nfdump file, and replace it with the wrapper script. I did this as follows. Feel free to improvise. I did.<BR>
 <BR>
-Make locations for the perl script and the log data.<BR>
+Make locations for the perl script.<BR>
 mkdir /usr/local/nfdumpWrapper<BR>
-mkdir /usr/local/nfdumpWrapper/log<BR>
-mkdir /usr/local/nfdumpWrapper/logtest<BR>
 <BR>
 Copy the wrapper to the new location.<BR>
 cp NFDump-wrapper.pl /usr/local/nfdumpWrapper<BR>
