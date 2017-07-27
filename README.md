@@ -61,7 +61,7 @@ mv /usr/local/bin/nfdump /usr/local/bin/.nfdump<BR>
 Put the wrapper in place of nfdump by linking to the original location.<BR>
 ln -s /usr/local/nfdumpWrapper/NFDump-wrapper.pl /usr/local/bin/nfdump<BR>
 <BR>
-The code has at the top some items that you may want to edit. Such as Directory Default locations. I am using /tmp as the root location for the 3 directories that the code uses. It will make the sub directories it wants if they do not already exist. I suggest letting the GUI application run the wrapper to make the locations in order to make sure they have the correct ownerships. If you run the program manually the first time, your mileage may vary.
+The code has at the top some items that you may want to edit. Such as Directory Default locations. I am using /tmp as the root location for the 3 directories that the code uses. It will make the sub directories it wants if they do not already exist. I suggest letting the GUI application run the wrapper to make the locations in order to make sure they have the correct ownerships. If you run the program manually the first time, your mileage may vary.<BR>
 <BR>
 <B>Possible problems:</B><BR>
 I encountered a situation where the httpd process runs in a protected space. In that space there is a private tmp directory. The httpd process thinks this is a root based /tmp location. I did not figure this out initially, so when I did find a solution I took the easy way out. The system I run this on is Red Hat 7. The httpd process creates a protected directory in /tmp using a long convoluted name. Maybe you have seen and wondered what that was for. I ignored it until it prevented me from doing what I needed.<BR>
