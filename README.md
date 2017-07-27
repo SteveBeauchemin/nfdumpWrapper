@@ -1,11 +1,13 @@
 # nfdumpWrapper
 <B>A wrapper for nfdump that makes use of GNU parallel and makes use of all your host CPU.</B><BR>
 <BR>
-This is Version 1.0.1
+This is developed for use with Nagios Network Analyzer (NNA) but should be easily expanded to work transparently with any application that invokes nfdump.<BR>
 <BR>
-This is developed for use with Nagios Network Analyzer but should be easily expanded to work transparently with any application that invokes nfdump.<BR>
+I call this Version 1.0.1. I have changed some initial default settings and timings and see some performance improvements.<BR>
 <BR>
-Currently the wrapper works for all the provided data display except the Top Talkers. The Top Talker is on my list for later. In some cases the Chord Diagrams do not display properly and state "No Data". I have only seen that on Custom Queries that I made myself. In those cases it is possible that the output you are asking for is not able to be displayed. All the canned displays seem work with the wrapper.<BR>
+This wrapper may make a smaller installation of NNA run slower. I have a large site and expect to eventually have about 600 devices sending flow data. Until I get all the flows coming to NNA I will not know if this actually helps. Also, this wrapper is just one way I am making NNA run faster. I have made php and javascript changes too. With that in mind I find that NNA is working good so far.
+<BR>
+Currently the wrapper works for all the provided data display except the Top Talkers. The Top Talker is on my list for later. In some cases the Chord Diagrams do not display properly and state "No Data". I have only seen that on Custom Queries that I made myself. In those cases it is possible that the output asked for made no sense. All the canned displays seem work with the wrapper.<BR>
 <BR>
 The wrapper works by taking the initial command line invoked for nfdump and breaking it into smaller tasks. These tasks can be run in parallel with each other, and the output aggregated to provide the initial requested data.<BR>
 <BR>
