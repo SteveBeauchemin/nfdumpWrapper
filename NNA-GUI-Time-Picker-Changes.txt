@@ -1,0 +1,196 @@
+
+Changes to add more time interval choices
+
+The smallest window by default is 24 hours. These changes below add in 2, 4, 6, and 12 hour choices for queries. You can always use a custom time frame, but these are now available, and the default is changed from 24 hours to 2 hours.
+
+
+Files being changed are located here:
+/var/www/html/nagiosna/www/media/js/helpers.js
+/var/www/html/nagiosna/application/language/english/main_lang.php
+/var/www/html/nagiosna/application/views/reports/home.php
+/var/www/html/nagiosna/application/views/generic/reports.php
+/var/www/html/nagiosna/application/views/generic/summary.php
+/var/www/html/nagiosna/application/views/generic/queries.php
+/var/www/html/nagiosna/application/views/queries/home.php
+
+=============================================
+diff OriginalFiles/helpers.js NewFiles-2017-07-19/helpers.js
+83a84
+> // SLB 2017-07-19 Added smaller time ranges
+86c87,96
+<     if (start == '-24 hours' && end == '-1 second') {
+---
+>     // ================= changed from here - SLB 2017-07-19
+>     if (start == '-2 hours' && end == '-1 second') {
+>         return "last 2 hours";
+>     } else if (start == '-4 hours' && end == '-1 second') {
+>         return "last 4 hours";
+>     } else if (start == '-6 hours' && end == '-1 second') {
+>         return "last 6 hours";
+>     } else if (start == '-12 hours' && end == '-1 second') {
+>         return "last 12 hours";
+>     } else if (start == '-24 hours' && end == '-1 second') {
+87a98
+>     // ================= to here - SLB 2017-07-19
+100a112
+>
+132a145
+> // SLB 2017-07-19 changed seconds field
+136c149,151
+<     var new_time = front[2] + '/' + front[0] + '/' + front[1] + '.' + date[1] + ':00';
+---
+>     // SLB 2017-07-19 changed 00 to 59
+>     // var new_time = front[2] + '/' + front[0] + '/' + front[1] + '.' + date[1] + ':00';
+>     var new_time = front[2] + '/' + front[0] + '/' + front[1] + '.' + date[1] + ':59';
+147a163
+> // SLB 2017-07-19 Added smaller time ranges
+151c167,176
+<     if (start == '-24 hours' && end == '-1 second') {
+---
+>     // ================= changed from here - SLB 2017-07-19
+>     if (start == '-2 hours' && end == '-1 second') {
+>         tr.val('2h');
+>     } else if (start == '-4 hours' && end == '-1 second') {
+>         tr.val('4h');
+>     } else if (start == '-6 hours' && end == '-1 second') {
+>         tr.val('6h');
+>     } else if (start == '-12 hours' && end == '-1 second') {
+>         tr.val('12h');
+>     } else if (start == '-24 hours' && end == '-1 second') {
+152a178
+>     // ================= to here - SLB 2017-07-19
+184a211
+> // SLB 2017-07-19 Added smaller time ranges
+189c216,225
+<     if (select == '24h') {
+---
+>     // ================= changed from here - SLB 2017-07-19
+>     if (select == '2h') {
+>         dates.start = '-2 hours';
+>     } else if (select == '4h') {
+>         dates.start = '-4 hours';
+>     } else if (select == '6h') {
+>         dates.start = '-6 hours';
+>     } else if (select == '12h') {
+>         dates.start = '-12 hours';
+>     } else if (select == '24h') {
+192c228,229
+<         dates.start = '-48 hours';
+---
+>         dates.start = '-2 days';
+>     // ================= to here - SLB 2017-07-19
+231c268
+< }
+\ No newline at end of file
+---
+> }
+
+
+=============================================
+diff OriginalFiles/main_lang.php NewFiles-2017-07-19/main_lang.php
+190a191,194
+> $lang['timerange_2hrs'] = 'Last 2 Hours';
+> $lang['timerange_4hrs'] = 'Last 4 Hours';
+> $lang['timerange_6hrs'] = 'Last 6 Hours';
+> $lang['timerange_12hrs'] = 'Last 12 Hours';
+1051c1055
+< $lang['update_no_logs'] = 'No updates have been performed through the web UI.';
+\ No newline at end of file
+---
+> $lang['update_no_logs'] = 'No updates have been performed through the web UI.';
+
+
+=============================================
+diff OriginalFiles/reports-home.php NewFiles-2017-07-19/reports-home.php
+29c29
+<         $('#timerange').val('24h').trigger('change');
+---
+>         $('#timerange').val('2h').trigger('change');
+306a307,310
+>                                 <option value="2h"><?php echo lang('timerange_2hrs'); ?></option>
+>                                 <option value="4h"><?php echo lang('timerange_4hrs'); ?></option>
+>                                 <option value="6h"><?php echo lang('timerange_6hrs'); ?></option>
+>                                 <option value="12h"><?php echo lang('timerange_12hrs'); ?></option>
+322c326
+<                                 <input type="text" value="24 hours" title="<?php echo lang('timerange_elsapsed_desc'); ?>" class="input-small tt_bind" id="elapsed_start">
+---
+>                                 <input type="text" value="2 hours" title="<?php echo lang('timerange_elsapsed_desc'); ?>" class="input-small tt_bind" id="elapsed_start">
+
+
+=============================================
+diff OriginalFiles/reports.php NewFiles-2017-07-19/reports.php
+495a496,499
+>                                     <option value="2h"><?php echo lang('timerange_2hrs'); ?></option>
+>                                     <option value="4h"><?php echo lang('timerange_4hrs'); ?></option>
+>                                     <option value="6h"><?php echo lang('timerange_6hrs'); ?></option>
+>                                     <option value="12h"><?php echo lang('timerange_12hrs'); ?></option>
+509c513
+<                                     <input type="text" value="24 hours" title="<?php echo lang('timerange_elsapsed_desc'); ?>" class="input-small tt_bind" id="elapsed_start">
+---
+>                                     <input type="text" value="2 hours" title="<?php echo lang('timerange_elsapsed_desc'); ?>" class="input-small tt_bind" id="elapsed_start">
+
+
+=============================================
+diff OriginalFiles/summary.php NewFiles-2017-07-19/summary.php
+40a41
+>     // SLB 2017-07-19 Change refresh to larger time - some reports just finish loading just as refresh sharts
+42c43,47
+<     setInterval(function() { reload_visuals(); }, 300000);
+---
+>     // setInterval(function() { reload_visuals(); }, 300000);
+>     // Have the graph  & top talkers load fresh every 10 minutes
+>     // setInterval(function() { reload_visuals(); }, 600000);
+>     // Have the graph  & top talkers load fresh every 15 minutes
+>     setInterval(function() { reload_visuals(); }, 900000);
+91a97,100
+>                     <option value="-2 hours|-1 second"><?php echo lang('timerange_2hrs'); ?></option>
+>                     <option value="-4 hours|-1 second"><?php echo lang('timerange_4hrs'); ?></option>
+>                     <option value="-6 hours|-1 second"><?php echo lang('timerange_6hrs'); ?></option>
+>                     <option value="-12 hours|-1 second"><?php echo lang('timerange_12hrs'); ?></option>
+
+
+=============================================
+diff OriginalFiles/queries.php NewFiles-2017-07-19/queries.php
+416a417,420
+>                                     <option value="2h"><?php echo lang('timerange_2hrs'); ?></option>
+>                                     <option value="4h"><?php echo lang('timerange_4hrs'); ?></option>
+>                                     <option value="6h"><?php echo lang('timerange_6hrs'); ?></option>
+>                                     <option value="12h"><?php echo lang('timerange_12hrs'); ?></option>
+430c434
+<                                     <input type="text" value="24 hours" title="<?php echo lang('timerange_elsapsed_desc'); ?>" class="input-small tt_bind custom-field" id="elapsed_start">
+---
+>                                     <input type="text" value="2 hours" title="<?php echo lang('timerange_elsapsed_desc'); ?>" class="input-small tt_bind custom-field" id="elapsed_start">
+612c616
+< <?php if (empty($download)) { echo $footer; } ?>
+\ No newline at end of file
+---
+> <?php if (empty($download)) { echo $footer; } ?>
+
+
+=============================================
+diff OriginalFiles/queries-home.php NewFiles-2017-07-19/queries-home.php
+35c35,37
+<         $('#timerange').val('24h').trigger('change');
+---
+>         // SLB 2017-07-19 Changed 24h to 2h
+>         // $('#timerange').val('24h').trigger('change');
+>         $('#timerange').val('2h').trigger('change');
+287a290,293
+>                         <option value="2h"><?php echo lang('timerange_2hrs'); ?></option>
+>                         <option value="4h"><?php echo lang('timerange_4hrs'); ?></option>
+>                         <option value="6h"><?php echo lang('timerange_6hrs'); ?></option>
+>                         <option value="12h"><?php echo lang('timerange_12hrs'); ?></option>
+301c307
+<                         <input type="text" value="24 hours" title="<?php echo lang('timerange_elsapsed_desc'); ?>" class="input-small tt_bind" id="elapsed_start">
+---
+>                         <input type="text" value="2 hours" title="<?php echo lang('timerange_elsapsed_desc'); ?>" class="input-small tt_bind" id="elapsed_start">
+352c358
+< <?php echo $footer; ?>
+\ No newline at end of file
+---
+> <?php echo $footer; ?>
+
+
+=============================================
+
+

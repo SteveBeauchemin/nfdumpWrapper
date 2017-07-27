@@ -1,0 +1,25 @@
+When clicking a menu to get to the reports tab, the currently selected item will automatically run before you have a chance to change the menu item to the report you actually want to see.
+
+This change will change the default such that you need to click the run button.
+
+Posted to forum - got response.
+https://support.nagios.com/forum/viewtopic.php?f=32&t=44483
+
+vi /var/www/html/nagiosna/application/views/generic/reports.php
+
+When going to the tab - do not run the top Report on the list
+Changed Line 33
+
+    // var run_change = true;
+    // SLB 2017-07-06 stop page from running automatically.
+    var run_change = false;
+
+When selecting a Report - do not run simply because I chose it. What if I missed by one item, and wanted the next one down the list. Only run once the Run Report button is clicked.
+Changed line 157
+
+    // var run_change = true;
+    // SLB 2017-07-10 stop page from running automatically.
+    run_change = false;
+
+Caveat: When you do click the Run Report button, there is no indication that the tool is trying to populate new data. The previous screen stays in place until replaced by new content, no spinner, no indicator of work in progress. The header changes but the table data does not. It is confusing and makes you think it has the new data present.
+

@@ -1,0 +1,49 @@
+
+
+These are the basic steps in an order that made sense to me at the time.
+
+This will uninstall enough of Nagios Network Analyzer that you will be able to do a clean install and start over. If you had done a backup, you can do a restore but the restore script is not very good. It uses mysql and not mariadb. It also tries to do something with iptables even though we have firewalld instead. It seems to be Red Hat 6 specific.
+
+Your mileage may vary...
+
+mysql -uroot -p[password]
+drop database nagiosna;
+exit
+
+systemctl disable httpd
+systemctl stop httpd
+systemctl disable nagiosna
+systemctl stop nagiosna
+systemctl disable mariadb
+systemctl stop mariadb
+
+rm -rf /usr/local/nagiosna
+rm -rf /var/www/html/nagiosna
+rm -f /var/www/html/nna.php
+
+yum -y remove wkhtmltox
+
+rm -rf /tmp/nagiosna
+
+cd /tmp
+tar -xzvf nagiosna-2.2.3.tar.gz
+
+
+cd /tmp/nagiosna
+
+either edit fullinstall and change
+
+       print_header "Nagios Network Analyzer"
+        run_steps prereqs sourceguardian timezone rrdtool build_nfdump library_path nagiosna backend db firewall selinux install_mibs install_sudo install_cron wkhtmltopdf webroot daemons
+
+remove build_nfdump
+remove firewall
+remove install_sudo
+
+At this point, the full install should work.
+
+
+The build nfdump will install an older version on top of the latest version. It will not work with the Wrapper.
+
+
+

@@ -1,0 +1,40 @@
+In order to support flows and provide resources, the following kernel changes are required.
+Some are set by the installation, I increased one since then.
+
+In particular the kernel.sem
+
+cat sysctl.conf
+# Kernel sysctl configuration file for Red Hat Linux
+#
+# For binary values, 0 is disabled, 1 is enabled.  See sysctl(8) and
+# sysctl.conf(5) for more details.
+
+# Controls IP packet forwarding
+net.ipv4.ip_forward = 0
+
+# Controls source route verification
+net.ipv4.conf.default.rp_filter = 1
+
+# Do not accept source routing
+net.ipv4.conf.default.accept_source_route = 0
+
+# Controls the System Request debugging functionality of the kernel
+kernel.sysrq = 1
+
+# Controls whether core dumps will append the PID to the core filename.
+# Useful for debugging multi-threaded applications.
+kernel.core_uses_pid = 1
+kernel.shmmax = 536870912
+kernel.shmall = 2097152
+#kernel.sem = 250 32000 100 128
+# SLB 2017-06-19 - changes per forum post
+kernel.sem = 4096 1048576 4096 256
+net.ipv4.ip_local_port_range = 9000 65500
+net.core.rmem_default = 262144
+net.core.wmem_default = 262144
+net.core.rmem_max = 4194304
+net.core.wmem_max = 262144
+
+
+After the change run 'sysctl -p' as root to activate
+

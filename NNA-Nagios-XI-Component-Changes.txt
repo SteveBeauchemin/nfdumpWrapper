@@ -1,0 +1,49 @@
+
+Make the Nagios XI integrated component faster by changing the default display from 24 hours (Slow) to 2 hours (Fast)
+
+Basically find the 24 and change to 2
+Duplicate the line, and make the edit
+use // to comment original line in case you need to revert
+
+cd /usr/local/nagiosxi/html/includes/components/nagiosna
+
+vi nagiosna.inc.php
+
+edit #1
+function nagiosna_component_addtab($cbtype, &$cbdata)
+...
+        // SLB 2017-06-08 Changed default hours
+        // $content .= '<p>' . _("Showing the last 24 hours worth of netflow data on the selected Network Analyzer instance aggregated by source IP and destination IP and sorted by bytes.") . '</p>';
+        $content .= '<p>' . _("Showing the last 2 hours worth of netflow data on the selected Network Analyzer instance aggregated by source IP and destination IP and sorted by bytes.") . '</p>';
+
+
+edit #2
+function load_nagiosna_anon_query()
+...
+            var qdata = {
+                token: server[2],
+                // SLB 2017-06-08 Changed default hours,
+                // "q[begindate]": "-24 hours",
+                "q[begindate]": "-2 hours",
+
+
+edit #3 (Same function as edit #2)
+            // SLB 2017-06-08 Changed default hours
+            // $(".nna_link").attr("href", nna_url + "/groups/queries/1?q[rawquery]=" + rawquery + "&q[begindate]=" + encodeURIComponent("-24 hours") + "&q[aggregate_csv]=" + encodeURIComponent("srcip,dstip") + "&q[enddate]=" + encodeURIComponent("-1 second"));
+            $(".nna_link").attr("href", nna_url + "/groups/queries/1?q[rawquery]=" + rawquery + "&q[begindate]=" + encodeURIComponent("-2 hours") + "&q[aggregate_csv]=" + encodeURIComponent("srcip,dstip") + "&q[enddate]=" + encodeURIComponent("-1 second"));
+
+
+
+edit #4
+function do_make_chord_full()
+...
+            var qdata = {
+                token: server[2],
+                // SLB 2017-06-08 Changed default hours
+                // "q[begindate]": "-24 hours",
+                "q[begindate]": "-2 hours",
+
+
+Save and exit the file
+
+
