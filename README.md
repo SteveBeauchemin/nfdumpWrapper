@@ -5,7 +5,7 @@ This is developed for use with Nagios Network Analyzer (NNA) but should be easil
 <BR>
 I call this Version 1.0.1. I have changed some initial default settings and timings and see some performance improvements.<BR>
 <BR>
-This wrapper may make a smaller installation of NNA run slower. I have a large site and expect to eventually have about 600 devices sending flow data. Until I get all the flows coming to NNA I will not know if this actually helps. Also, this wrapper is just one way I am making NNA run faster. I have made php and javascript changes too. With that in mind I find that NNA is working good so far.
+This wrapper may make a smaller installation of NNA run slower. I have a large site and expect to eventually have about 600 devices sending flow data. Until I get all the flows coming to NNA I will not know if this actually helps. Also, this wrapper is just one way I am making NNA run faster. I have made php and javascript changes too. With that in mind I find that NNA is working good so far.<BR>
 <BR>
 Currently the wrapper works for all the provided data display except the Top Talkers. The Top Talker is on my list for later. In some cases the Chord Diagrams do not display properly and state "No Data". I have only seen that on Custom Queries that I made myself. In those cases it is possible that the output asked for made no sense. All the canned displays seem work with the wrapper.<BR>
 <BR>
