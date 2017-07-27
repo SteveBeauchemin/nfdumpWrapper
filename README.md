@@ -1,13 +1,15 @@
 # nfdumpWrapper
 <B>A wrapper for nfdump that makes use of GNU parallel and makes use of all your host CPU.</B><BR>
 <BR>
+This is Version 1.0.1
+<BR>
 This is developed for use with Nagios Network Analyzer but should be easily expanded to work transparently with any application that invokes nfdump.<BR>
 <BR>
 Currently the wrapper works for all the provided data display except the Top Talkers. The Top Talker is on my list for later. In some cases the Chord Diagrams do not display properly and state "No Data". I have only seen that on Custom Queries that I made myself. In those cases it is possible that the output you are asking for is not able to be displayed. All the canned displays seem work with the wrapper.<BR>
 <BR>
 The wrapper works by taking the initial command line invoked for nfdump and breaking it into smaller tasks. These tasks can be run in parallel with each other, and the output aggregated to provide the initial requested data.<BR>
 <BR>
-The syntax of certain nfdump parameters lend themselves to being broken into smaller pieces. Look at the man page for nfdump at the -t and the -M parameters. Also check out the -w parameter. Using this information I create multiple lines of nfdump commands that can be run in parallel. The binary results are saved in intermediate files. Then I run the original command against the intermediate files. The initial multi line nfdump commands are run using GNU parallel. The final pass is run against the intermediate binary results. The initial size of data could be many hundreds of gigabytes. The intermediate file size will be much smaller and as a result run very fast.<BR>
+The syntax of certain nfdump parameters lend themselves to being broken into smaller pieces. Look at the man page for nfdump at the -t and the -M parameters. Also check out the -w parameter. Using this information I create multiple lines of nfdump commands that can be run in parallel. The binary results are saved in intermediate files. Then I run the original command against the intermediate files. The initial multi line nfdump commands are run using GNU parallel. The final pass is run against the intermediate binary results. The initial size of data could be many hundreds of gigabytes. The intermediate file size will be much smaller and as a result run very fast. I hope...<BR>
 <BR>
 <B>Prequisite Perl Modules:</B><BR>
 Getopt::Long<BR>
@@ -57,9 +59,7 @@ mv /usr/local/bin/nfdump /usr/local/bin/.nfdump<BR>
 Put the wrapper in place of nfdump by linking to the original location.<BR>
 ln -s /usr/local/nfdumpWrapper/NFDump-wrapper.pl /usr/local/bin/nfdump<BR>
 <BR>
-Make sure that the log locations can be written to. Do this however you like. I know 777 is not preferred.<BR>
-chmod 777 /usr/local/nfdumpWrapper/log<BR>
-chmod 777 /usr/local/nfdumpWrapper/logtest<BR>
+The code has at the top some items that you may want to edit. Such as Directory Default locations. I am using /tmp as the root location for the 3 directories that the code uses. It will make the sub directories it wants if they do not already exist. I suggest letting the GUI application run the wrapper to make the locations in order to make sure they have the correct ownerships. If you run the program manually the first time, your mileage may vary.
 <BR>
 <B>Possible problems:</B><BR>
 I encountered a situation where the httpd process runs in a protected space. In that space there is a private tmp directory. The httpd process thinks this is a root based /tmp location. I did not figure this out initially, so when I did find a solution I took the easy way out. The system I run this on is Red Hat 7. The httpd process creates a protected directory in /tmp using a long convoluted name. Maybe you have seen and wondered what that was for. I ignored it until it prevented me from doing what I needed.<BR>

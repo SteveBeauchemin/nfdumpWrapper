@@ -6,12 +6,8 @@
 ## This is written specifically for Nagios Network Analyzer but should 
 ## be easy enough to make changes and support any nfdump activity.
 ## Created by Steve Beauchemin - sbeauchemin@gmail.com - 2017-06-28
+## Version 1.0.1
 ##
-
-# Initial Release
-# Steven Beauchemin 2017-07-20
-# sbeauchemin@gmail.com
-# Version 1.0.0
 
 use strict; 
 use warnings; 
@@ -25,6 +21,19 @@ use File::Remove 'remove';
 use Data::Dump 'dump';
 use Cwd 'abs_path';
 
+# Make sure that the perl modules listed above are installed
+# perl -MCPAN -e shell
+# install Getopt::Long
+# install Date::Format
+# install Time::Local
+# install File::Basename
+# install File::chdir
+# install File::Path
+# install File::Remove
+# install Data::Dump
+# install Cwd
+# exit
+
 ## Absolute on off
 # Define an on/true off/false switch for the Entire wrapper.
 # This is handy if you simply want to log the syntax that any application is sending to nfdump.
@@ -34,39 +43,79 @@ use Cwd 'abs_path';
 my $MasterPass = "false"; # we will not simply pass through - we are gonna try to use parallel processing
 
 ## There is log data kept for each run so the syntax can be examined. 
-# To see VERBOSE log data change the following variable to true
-#my $Verbose = "false";
-my $Verbose = "true";
+# To see VERBOSE log data change the following variable to 1
+my $Verbose = 0;
+#my $Verbose = 1;
 
 # Set a default multiplier for time intervals
 # setting a default of 1 hour - if you change this, test the output using debug to make sure you like the result
-# I like it set to 1. It works for me.
-my $interval = "1";
+# Find your preferred setting - these numbers are what I observed at one time
+#my $interval = "1"; # chords take about 80 seconds <===  Worst setting... one hour chunks
+#my $interval = "2"; # chords take about 45 seconds
+#my $interval = "3"; # chords take about 41 seconds
+my $interval = "4"; # chords take about 36 seconds
+#my $interval = "5"; # chords take about 39 seconds
+#my $interval = "12"; # chords take about 42 seconds - no time split - only Dir split
+
+# Make sure that this is aimed at the actual nfdump binary as the
+# real nfdump is renamed to .nfdump or otherwise hidden somewhere
+# mv /usr/local/bin/nfdump /usr/local/bin/.nfdump
+my $command = "/usr/local/bin/.nfdump";
 
 # define location variables
 # Install the wrapper here
 my $BASEDIR = "/usr/local/nfdumpWrapper/";
-# Put temporary files here
-# They should get cleaned out on a regular basis automatically by the program. 
-# Maybe sneak in a time stamp check in the cleanup just in case. Delete old stuff...
-my $QUEDIR = "/tmp/nfdqueue/";
-my $TMPDIR = "/tmp/nfdtemp/";
+# then link it to nfdump
+# ln -s /usr/local/nfdumpWrapper/NFDump-wrapper.pl /usr/local/bin/nfdump
+# that is an easy install...
+
+my $QUEDIR = "/tmp";
+my $TMPDIR = "/tmp";
+my $LOGDIR = "/tmp";
+
+# make sure to install GNU Parallel from here => https://www.gnu.org/software/parallel/
+# Make sure to deal with the parallel citation
+# Run parallel manually and it will tell you what to type to remove the citation text
+# Remove the citation as the root user
+
+# ================================================================= No USER modifiable parameters below here
+# I hope
+
+my $alltstamp = time;
+
+my $DEBUG;
+my $LOG;
+
+# Detect how the wrapper is invoked
+# basename of nfdump means we are being used by a 3rd part app
+if (basename($0) =~ m/nfdump/) {
+  $QUEDIR .= "/nfdqueue/";
+  $TMPDIR .= "/nfdtemp/";
+  $LOGDIR .= "/nfdlogs/";
+  $LOG = $LOGDIR . "nfdump.log";
+  # 3rd party app would be confused if we output extra information so turn off DEBUG
+  $DEBUG=0;
+} else {
+  # running the perl script by its real name - probably manually for debug
+  $QUEDIR .= "/testnfdqueue/";
+  $TMPDIR .= "/testnfdtemp/";
+  $LOGDIR .= "/testnfdlogs/";
+  $LOG = $LOGDIR . "nfdump.log";
+  $DEBUG=0;  # change this one for debugging 
+  print "\nDebug is set to $DEBUG\n\n" if $DEBUG;
+}
 
 # check for temporary directories - make them if needed
 # Note: we will make other directories inside  the nfdtemp location
 if ( ! -d $QUEDIR ) {
-  make_path($QUEDIR, { mode => 0755 });
+  make_path($QUEDIR, { mode => 0775 });
 }
 if ( ! -d $TMPDIR ) {
-  make_path($TMPDIR, { mode => 0755 });
+  make_path($TMPDIR, { mode => 0775 });
 }
-
-# Make sure that this is aimed at the actual nfdump binary as the
-# real nfdump is renamed to .nfdump or otherwise hidden somewhere
-my $command = "/usr/local/bin/.nfdump";
-
-# ================================================================= No USER modifiable parameters below here
-# I hope
+if ( ! -d $LOGDIR ) {
+  make_path($LOGDIR, { mode => 0775 });
+}
 
 ## Conditional on off
 # Some commands should not be run as a parallel process.
@@ -75,14 +124,6 @@ my $command = "/usr/local/bin/.nfdump";
 # A value of false is the necessary default and will be changed
 # automatically as needed if a parameter in use will benefit.
 my $passthru = "false"; # we will not simply pass through - we are gonna be using parallel processing
-
-## Some parameters allow for nfdump to create intermediate files. This makes using parallel much easier.
-# If the -a -A -b or -B are used, then we can use -w [outfile]. What this means is that we can use parallel and
-# output to a special directory all the small parallel file results. Then, against that location we can run the actual
-# syntax we were requesing in the first place, and it will run in less than a second, as the data has been processed and
-# reduced to what we actually care about. If a parameter would be a candidate then this vaulue is changed automatically.
-# The default is false.
-my $useoutfile = "false";
 
 ## If looking for Top Talkers then we need to do a different parallel syntax. 
 # We need to capture the return data in an array and processes it.
@@ -93,29 +134,14 @@ my $toptalker = "false";
 # filter would be the last command line item using no parameter, just a value
 my $filter = "";
 
-# Make arrays to hold data
+# Make variables and arrays to hold data
+my $dircount;
 my @DirList;
+my $timecount;
 my @TimeList;
-
-# Make other variable that need access by multiple subroutines
-my $LOG;
-my $DEBUG;
+my @toptalkersparallelout;
 my $NFDLOCATION = "";
 my $quefile = "";
-my $counter = "1";
-
-# Detect how the wrapper is invoked
-# basename of nfdump means we are being used by a 3rd part app
-if (basename($0) =~ m/nfdump/) {
-  $LOG = $BASEDIR . "log/nfdump.log";
-  # 3rd party app would be confused if we output extra information so turn off DEBUG
-  $DEBUG=0;
-} else {
-  # running the perl script by its real name - probably manually for debug
-  $LOG = $BASEDIR . "logtest/testing-nfdump.log";
-  $DEBUG=0;  # change this one for debugging 
-  print "\nDebug is set to $DEBUG\n\n" if $DEBUG;
-}
 
 # ====================================== Get command line options
 # ===============================================================
@@ -157,7 +183,7 @@ GetOptions(
         "h"	=> \my $opt_h,
 );
 
-# if any command line data is left over save it to filter
+# if any command line data is left over save it to the filter variable
 if ($ARGV[0]) {
   foreach (@ARGV) {
     $filter .= "$_";
@@ -166,7 +192,7 @@ if ($ARGV[0]) {
 
 
 # =============================== Process command line parameters
-# ============================= and start to construct the syntax
+# ============================= and begin to construct the syntax
 # ===============================================================
 
 if ($opt_r) {
@@ -369,41 +395,38 @@ if ($filter) {
 }
 
 # ===========================================================================================
-## Make pass through decisions here - use proper judgement when selecting order of precedence
+# ===========================================================================================
+## Make decisions here based on the command line parameters - use proper judgement when selecting order of precedence
 #
 if ($opt_c) {
-  # Introduce a small delay here to prevent multiple NNA queries from running in the same dir space
-  # This happens when using the tab Nagios XI and it makes 2 requests to NNA at the same exact second
-  # Since we use a time stamp in the code we need to make sure that the times are different.
+  # The use of opt_c implies that this is a Chord Diagram.
+  # Introduce a small delay here to prevent multiple NNA queries from running  at the same exact second.
+  # This happens when using the tab in Nagios XI and it makes 2 requests to NNA. It also happens on
+  # the Summary page. A small delay makes sure that the tstamp is different for each run.
+  # Since we use a time stamp in the code for making directories we need to make sure that the times are different
+  # and the directory names are different.
   sleep(2);
-  # =============================================================================== <<<< This opt_c causes chord to not be run parallel for now.
-  # code is in process...
-  # May not be needed for Chord Diagrams... lets aggregate more flow data and see later.
-  #$toptalker = "true";
 }
 if (($opt_t) || ($opt_M) || ($opt_R)) {
   # These are good candidates for use of parallel processing - do not simply pass through to nfdump
   $passthru = "false";
 }
 if (($opt_B) || ($opt_b) || ($opt_A) || ($opt_a)) {
-  # This parameter implies that we can use Parallel and an Intermediate directory
+  # Use of these parameters implies that we can use Parallel and an Intermediate directory
   $passthru = "false";
-  $useoutfile = "true";
 }
 if ($opt_n) {
-  # The query is for Top Talker data, so if we run parallel we need to merge the data, 
-  # sort it, add it, whatever it takes to format it as if it were a single query.
+  # The query is for Top Talker data.
   $toptalker = "true";
 }
 if (($opt_Z) || ($opt_w)) {
   # if the -Z is passed then we are just doing a syntax check
   # if the -w is passed as a parameter then something unusual is being requested so
-  # lets become invisible and just run the nfdump syntax we are sent.
+  # in either case lets become invisible and just run the nfdump syntax we are sent.
   # Entering Master Pass Thru mode...
   $MasterPass = "true";
 }
 # ===========================================================================================
-
 
 print "\n\n" if $DEBUG;
 
@@ -428,312 +451,430 @@ if ($opt_t) {
 if ($filter) {
   $logcmd .= " \'$filter\'";
 }
+
 my $eventtime = time2str("%Y-%m-%d %I:%M:%S %p %Z", time);
 
 # Write the nfdump syntax in an untouched state.
 open(my $OUTPUT, '>>', $LOG);
-print $OUTPUT "---------------------------------------------------------" .  $eventtime . " \n" ;
+print $OUTPUT "\n\nNew dump started\n";
+print $OUTPUT "========================================================= Start " .  $eventtime . " \n";
 print $OUTPUT "Initial syntax untouched is\n" if $Verbose;
 print $OUTPUT "$logcmd\n\n" if $Verbose;
+
+# set a time that all parts of this code will use for making items
+my $tstamp = time;
 
 # ===============================================================
 #  ------------------------------------------------- Main Section
 # ===============================================================
-# Do we or Don't we run GNU Parallel - test the circumstances
+# Do we or Don't we run GNU Parallel - test the circumstances and invoke nfdump
 
-# set a time that all parts of this run will use
-my $tstamp = time;
-
-if ($MasterPass eq "true") {
-  # IF false, then skip all  further efforts as we are not enabled.
-  # So just run the nfdump command as submitted with no performance improvements
+# we are told here outright to run or not run
+if (($MasterPass eq "true") || ($passthru eq "true")) {
+  my $timer = time;
+  # Skip all further efforts if we are not enabled.
+  # run the nfdump command as submitted with no performance improvements
   # Use the logcmd from above as this represents unmodified input
   system($logcmd) unless $DEBUG;
-  print "MasterPass true mode in effect - We would have run\n$logcmd\n" if $DEBUG;
-  print $OUTPUT "MasterPass true mode in effect - We would have run\n$logcmd\n\n";
+  print "MasterPass true mode in effect - We have run\n$logcmd\n" if $DEBUG;
+  print $OUTPUT "========================================================= MasterPass true mode in effect - We have run\n$logcmd\n\n";
+  my $duration = time - $timer;
+  print $OUTPUT "========================================================= No Special Processing - Execution time: $duration s\n";
   close $OUTPUT;
-} else {
-  # We are globally enabled and will enhance performance based on the parameters submitted to nfdump
-  if ($passthru eq "true") {
-    # The parameters passed provide no enhancement possibility so execute nfdump and hide in plain sight
-    system($logcmd) unless $DEBUG;
-    print "No Parallel needed - We would have run\n$logcmd\n\n" if $DEBUG;
-    print $OUTPUT "No Parallel needed - We would have run\n$logcmd\n\n";
-  } else {
-    print "Parallel may be needed - processing parameters for\n$logcmd\n\n" if $DEBUG;
-    print $OUTPUT "Parallel may be needed - processing parameters for\n$logcmd\n\n";
-    # Process the directories from -M
-    # populate array with directory list
-    @DirList = &DirToArray();
-    my $dircount = @DirList;
-    print "This is the expanded directory list \n" if $DEBUG;
-    dump @DirList if $DEBUG;
-    print "\n" if $DEBUG;
-    print $OUTPUT "This is the expanded directory list - broken up to $dircount items\n" if $Verbose;
-    print $OUTPUT @DirList if $Verbose;
-    print $OUTPUT "\n\n" if $Verbose;
-    #
-    # Process time range for -t
-    # populate array with time ranges
-    @TimeList = &TimeToArray();
-    my $timecount = @TimeList;
-    print "This is the expanded time range list \n" if $DEBUG;
-    dump @TimeList if $DEBUG;
-    print "\n" if $DEBUG;
-    print $OUTPUT "This is the expanded time range list - broken up to $timecount items\n" if $Verbose;
-    print $OUTPUT @TimeList if $Verbose;
-    print $OUTPUT "\n\n" if $Verbose;
-
-    #
-    if (($dircount eq "1") && ($timecount eq "1") || ($toptalker eq "true")) {
-      # each is one item long so just run the nfdump command
-      # as for Top Talkers, skip it for now until we solve that puzzle
-      system($logcmd) unless $DEBUG;
-      print "No Parallel needed - one dir and one timelist - Or Top Talker is asked for\n" if $DEBUG;
-      print "We would have run\n$logcmd\n\n" if $DEBUG;
-      print $OUTPUT "No Parallel needed - one dir and one timelist - Or Top Talker is asked for\n";
-      print $OUTPUT "We would have run\n$logcmd\n\n" if $Verbose;
-    } else {
-      # continue with the GNU parallel tasks
-      #
-      # Include any Pre Process commands or parameters
-      # Such as making an intermediate directory - hint hint...
-      print $OUTPUT "Will now run the sub PreProcess\n\n" if $Verbose;
-      &PreProcess();
-      #
-      # write the parallel queue file using the arrays from above and any extended command syntax
-      print $OUTPUT "Will now run the sub MakeQueueFile\n\n" if $Verbose;
-      $quefile = &MakeQueueFile();
-      print "queue File $quefile\n" if $DEBUG;
-      print $OUTPUT "queue File $quefile\n\n" if $Verbose;
-      # display the queue file so we can tell what would have run
-      &printfile($quefile) if $DEBUG;
-      #
-      # Do the work by using the queue file
-      # run parallel with proper parameters to be nice
-      print $OUTPUT "Will now run the sub runparallel with $quefile\n\n" if $Verbose;
-      &runparallel($quefile);
-      #
-      # Finish up the display of data
-      print $OUTPUT "Will now run the sub runFinalPass\n\n" if $Verbose;
-      &runFinalPass();
-      #
-      # Clean up any temporary files
-      # Only after all items work should this be allowed
-      print $OUTPUT "Will now run the sub RunCleanup for now\n\n" if $Verbose;
-      #print $OUTPUT "NOT gonna run the sub RunCleanup for now\n\n";
-      # Add a slight delay and allow files to finish any activity that may still be running
-      sleep(2);
-      &RunCleanup();
-      #
-    }
-  }
+  exit;
 }
-close $OUTPUT;
-# from here down are subroutines - we should never see the following exit line
+
+if ($opt_M) {
+  # Process the directories from -M
+  # populate array with directory list
+  @DirList = &DirToArray();
+  $dircount = @DirList;
+  print "This is the expanded directory list \n" if $DEBUG;
+  dump @DirList if $DEBUG;
+  print "\n" if $DEBUG;
+  print $OUTPUT "The expanded directory list is broken up to $dircount item(s)\n";
+  print $OUTPUT @DirList if $Verbose;
+  print $OUTPUT "\n\n" if $Verbose;
+}
+
+if ($opt_t) {
+  # Process time range for -t
+  # populate array with time ranges
+  @TimeList = &TimeToArray();
+  $timecount = @TimeList;
+  print "This is the expanded time range list \n" if $DEBUG;
+  dump @TimeList if $DEBUG;
+  print "\n" if $DEBUG;
+  print $OUTPUT "The expanded time range list is broken up to $timecount item(s)\n";
+  print $OUTPUT @TimeList if $Verbose;
+  print $OUTPUT "\n\n" if $Verbose;
+}
+
+# make one last go/nogo decision because if there is no reason to get fancy then don't
+# If the array are single items, then just run nfdump
+if (($dircount eq "1") && ($timecount eq "1")) {
+  my $timer = time;
+  # each array is one item long so just run the nfdump command
+  system($logcmd) unless $DEBUG;
+  print "No Parallel needed - one dir and one timelist is asked for\n" if $DEBUG;
+  print "We have run\n$logcmd\n\n" if $DEBUG;
+  print $OUTPUT "========================================================= No Parallel needed - one dir and one timelist is asked for\n";
+  print $OUTPUT "========================================================= We have run\n$logcmd\n\n";
+  my $duration = time - $timer;
+  print $OUTPUT "========================================================= Parameters and Selections lead to No Special Processing - Execution time: $duration s\n";
+  close $OUTPUT;
+  exit;
+}
+
+# At this point we know we will use parallel execution
+# So begin the GNU parallel tasks
+#
+
+# ================== So far there are 2 basic branches we need. 
+# One is Top Talkers, the other is for everything else
+# Top Talkers
+# as for Top Talkers, skip it for now until we solve that puzzle
+if ($toptalker eq "true") {
+  my $timer = time;
+  # A Top Talkers request is not able to use a binary output to an intermediate directory
+  # So we need to run it and save the text outputs in an array or variable, 
+  # and work with the data to create a final output
+
+  $quefile = "no-queue";
+ 
+  # write the parallel queue file using the arrays from -M and -t and any extended command syntax
+  #print $OUTPUT "Will now run the sub MakeTopTalkersQueueFile\n\n" if $Verbose;
+  #$quefile = &MakeTopTalkersQueueFile();
+  #print "queue File $quefile\n" if $DEBUG;
+  #print $OUTPUT "queue File $quefile\n\n" if $Verbose;
+
+  # display the queue file so we can tell what would have run
+  #&PrintFile($quefile) if $DEBUG;
+
+  # Do the work by using the queue file
+  # run parallel with proper parameters for Top Talkers
+  print $OUTPUT "Will now run the sub RunTopTalkersParallel with $quefile\n\n" if $Verbose;
+  &RunTopTalkersParallel($quefile);
+
+  # deal with the output and send to NNA
+  #print $OUTPUT "Will now run the sub RunTopTalkersFinalPass\n\n" if $Verbose;
+  #&RunTopTalkersFinalPass();
+
+  # Clean up any temporary files
+  #print $OUTPUT "Will now run the sub RunCleanup\n\n" if $Verbose;
+  #&RunCleanup();
+
+  my $duration = time - $timer;
+  print $OUTPUT "========================================================= Top Talkers - Execution time: $duration s\n";
+  close $OUTPUT;
+  exit;
+} 
+
+# we are not just passing thru...
+if ($passthru eq "false") {
+  my $timer = time;
+  # continue with optimization for all other requests such as Chord Diagrams or other Queries
+
+  # Do we have cached data
+  #my $decision = &TestIntermediateDir($alltstamp);
+  #if ($decision eq "false") {
+    # carry on with normal steps - we have no cache to use
+
+    # Make an intermediate directory
+    print $OUTPUT "Will now run the sub MakeIntermediateDir\n\n" if $Verbose;
+    &MakeIntermediateDir($tstamp);
+
+    # write the parallel queue file using the arrays from above and any extended command syntax
+    print $OUTPUT "Will now run the sub MakeQueueFile\n\n" if $Verbose;
+    $quefile = &MakeQueueFile();
+    print "queue File $quefile\n" if $DEBUG;
+    print $OUTPUT "queue File $quefile\n\n" if $Verbose;
+
+    # display the queue file so we can tell what would have run
+    &PrintFile($quefile) if $DEBUG;
+
+    # Do the work by using the queue file
+    # run parallel with proper parameters for using an intermediate directory
+    print $OUTPUT "Will now run the sub RunParallel with $quefile\n\n" if $Verbose;
+    &RunParallel($quefile);
+  #} # End of if so now we have cached data
+
+  # Finish up the display of data
+  print $OUTPUT "Will now run the sub RunFinalPass\n\n" if $Verbose;
+  &RunFinalPass();
+
+  # Clean up any temporary files - rethinking this as some cached data is useful
+  print $OUTPUT "Will now run the sub RunCleanup\n\n" if $Verbose;
+  &RunCleanup();
+
+  my $duration = time - $timer;
+  print $OUTPUT "========================================================= Intermediate Dir and Parallel Process - Execution time: $duration s\n";
+  close $OUTPUT;
+  exit;
+}
+
+# from here down are subroutines
 exit;
 
 # -----------------------------------------------------------------
 # Define Subroutines
 # -----------------------------------------------------------------
 
-# -----------------------------------------------------------------
-sub DirToArray() {
-  # take the -M parameter $opt_M and return an array
-  my @dirlist = split(":", $opt_M);
-  my @results;
-  #
-  # Process the list and dear with relative path versus absolute path
-  #  remember the first dir as that is the fully qualified one
-  #my $base = $dirlist[0];
-  my $base = shift @dirlist;
-  push (@results, $base);
-  #print "\n base dir is $base \n" if $DEBUG;
-  #
-  # Loop through the rest of the array and convert relative to absolute
-  foreach my $dir (@dirlist) {
-    my $path = $base . $dir;
-    my $newpath = abs_path($path) . "/";
-    push (@results, $newpath);
-  }
-  #
-  print $OUTPUT "Completed the directory expansion\n\n" if $Verbose;
-  return @results;
-}
+# =========================================================================
+# =========================================== SECTION FOR INTERMEDIATE FILES
+# =========================================================================
 
-# -----------------------------------------------------------------
-sub TimeToArray() {
-  my @results;
-  # Only slice up the time when it will be useful - add to this if you know something I don't
-  if ($useoutfile eq "true") {
-    my $onehour = "3600"; # in seconds
-    #my $fifteen = "900"; # in seconds
-    my $fifteen = "600"; # set to 10 minutes in seconds - try just a little smaller... see what happens - testing...
-    # Set number to increment by
-    my $skip = $interval * $onehour;
-  
-    # -t '2017/06/27.11:42:51-2017/06/27.15:42:50'
-    # take the -t parameter $opt_t and return an array
-    my ($start,$end) = split("-", $opt_t);
-    #print "Start is $start and End is $end\n" if $DEBUG;
-
-    # Separate the elements
-    my ($syear,$smonth,$sday,$shour,$sminute,$ssecond) = split /[\/\.:]/, $start;
-    my ($eyear,$emonth,$eday,$ehour,$eminute,$esecond) = split /[\/\.:]/, $end;
-
-    #print "Starting $syear,$smonth,$sday,$shour,$sminute,$ssecond Ending $eyear,$emonth,$eday,$ehour,$eminute,$esecond \n" if $DEBUG;
-    # Convert to Epoch
-    my $initialstart = timelocal($ssecond,$sminute,$shour,$sday,$smonth,$syear);
-    my $initialend = timelocal($esecond,$eminute,$ehour,$eday,$emonth,$eyear);
-    #print "Starting Epoch Time is $initialstart Ending Epoch Time is  $initialend \n" if $DEBUG;
-  
-    # Retain initialstart and initialend by using temporary names
-    my $workingstart = $initialstart;
-    my $workingend = $initialstart + $skip;
-    #print "Working Start Epoch Time is $workingstart Working End Epoch Time is $workingend \n" if $DEBUG;
-    # Start loop to step through time intervals
-    do {
-      # Convert Epoch to -t format
-      my $displaystart = &EpochToT($workingstart);
-      my $displayend = &EpochToT($workingend);
-      #print "\nDisplay Start $displaystart Display End $displayend \n" if $DEBUG;
-      # Do not exceed the original end time - first time through the loop
-      if ($workingend > $initialend) {
-        push (@results, $displaystart . "-" . $end);
-      } elsif ($workingend + $skip + $fifteen < $initialend) {
-        push (@results, $displaystart . "-" . $displayend);
+#-------------------------------------------------------------------------
+sub MakeQueueFile() {
+  my $extendparam = "";
+  my $counter = "0";
+  # open the parallel queue file for write
+  my $queuefile = $QUEDIR . "queue." . $tstamp;
+  print $OUTPUT "========================================================= Open Queue File open for writing $queuefile\n\n";
+  print $OUTPUT "Queue File will be written to $queuefile\n\n";
+  open(my $mfh, '>', "$queuefile") or print $OUTPUT "========================================================= Oops, we cannot open the queue file here - $queuefile $!\n";
+  # iterate the dir and time arrays and write to the queue file
+  foreach my $dir (@DirList) {
+    foreach my $increment (@TimeList) {
+      # make up incremental file names
+      $counter++;
+      my $filecounter = sprintf("%04d", $counter);
+      $extendparam = "-w \'" . $NFDLOCATION . "nfdfile." . $tstamp . "-" . $filecounter . "\'";
+      # Add to the final command line if there is a filter in use - the filter is always last
+      if ($filter) {
+        print $mfh "$command $extendparam -R \'$opt_R\' -M \'$dir\' -t \'$increment\' \'$filter\'\n";
+        print $OUTPUT "$command $extendparam -R \'$opt_R\' -M \'$dir\' -t \'$increment\' \'$filter\'\n" if $Verbose;
       } else {
-        push (@results, $displaystart . "-" . $end);
+        print $mfh "$command $extendparam -R \'$opt_R\' -M \'$dir\' -t \'$increment\'\n";
+        print $OUTPUT "$command $extendparam -R \'$opt_R\' -M \'$dir\' -t \'$increment\'\n" if $Verbose;
       }
-      $workingstart = $workingend + 1;
-      $workingend += $skip;
-    } while ($initialend > $workingend);
-  } else {
-    # do not modify time
-    push (@results, $opt_t);
+    }
   }
-  print $OUTPUT "Completed the time range expansion\n\n" if $Verbose;
-  return @results;
-}
+  close $mfh;
+  print $OUTPUT "closed the file $queuefile\n\n" if $Verbose;
+  print $OUTPUT "========================================================= Queue file has $counter entries for Parallel\n\n";
+
+  # return the queue file name
+  return "$queuefile";
+} # End of sub MakeQueueFile
 
 #-------------------------------------------------------------------------
-sub EpochToT($) {
-  my $toconvert = shift;
-  my ($sec,$min,$hour,$day,$month,$year) = localtime($toconvert);
-  # correct the date and month for humans
-  $year = 1900 + $year;
-  #$month++;
-  # Format for nfdump
-  my $date = sprintf "%04d/%02d/%02d.%02d:%02d:%02d", $year, $month, $day, $hour, $min, $sec;
-  return $date;
-}
+sub RunParallel($) {
+  # This sub will prepare files for the Final Pass. It should have no STDOUT
+  # queue file name
+  my $que = shift;
+  print "Parallel is Processing Queue File $que\n" if $DEBUG;
+  print $OUTPUT "========================================================= Parallel is Processing Queue File $que\n\n";
+  # the output needs to be hidden from display here so capture it to a variable
+  my $parallelout = qx(cat $que | parallel -j +0 2>&1);
+  print $OUTPUT "========================================================= Parallel qx (cat $que | parallel -j +0) has run\n\n";
+} # End of sub RunParallel
 
 #-------------------------------------------------------------------------
-sub PreProcess() {
-  if ($useoutfile eq "true") {
-    #$NFDLOCATION = $TMPDIR;
-    $NFDLOCATION = $TMPDIR . "nfd." . $tstamp . "/";
+sub RunFinalPass() {
+  # if we used the intermediate directory, then all our stuff is cached there waiting to display for NNA
+  # we just need to run nfdump a special way. so lets do that by getting the command syntax correctly set.
+  print $OUTPUT "Starting a Final Pass\n\n" if $Verbose;
+  # we removed the -c from the smaller parallel runs for Chord Diagrams but add it back for the final pass
+  if ($opt_c) {
+    $command .= " -c \'$opt_c\'";
+  }
+  # for a final pass we use the intermediate directory to complete the command syntax
+  if ($filter) {
+    $command .= " -R \'.\' -M \'$NFDLOCATION\' -t \'$opt_t\' \'$filter\'";
+  } else {
+    $command .= " -R \'.\' -M \'$NFDLOCATION\' -t \'$opt_t\'";
+  }
+  # run the command and let the output go to NNA
+  print $OUTPUT "========================================================= Running special nfdump to aggregate Intermediate file data\n";
+  print $OUTPUT "========================================================= Running syntax is\n$command\n\n";
+  system($command);
+  print "DEBUG is on - parallel was run - this is a final pass to produce the final result\n$command\n\n" if $DEBUG;
+  print $OUTPUT "Intermediate file data has been processed\n\n" if $Verbose;
+} # End of sub RunFinalPass
+
+# =========================================================================
+# ===================================================== TOP TALKERS SECTION
+# =========================================================================
+
+#-------------------------------------------------------------------------
+sub MakeTopTalkersQueueFile() {
+  # open the parallel queue file for write
+  my $queuefile = $QUEDIR . "queue." . $tstamp;
+  print $OUTPUT "========================================================= Open Queue File open for writing $queuefile\n\n";
+  open(my $mfh, '>', "$queuefile") 
+    or print $OUTPUT "========================================================= Oops, we cannot open the queue file here - $queuefile $!\n";
+  # iterate the dir and time arrays and write to the queue file
+  foreach my $dir (@DirList) {
+    foreach my $increment (@TimeList) {
+      # Add to the final command line if there is a filter in use - the filter is always last
+      if ($filter) {
+        print $mfh "$command -R \'$opt_R\' -M \'$dir\' -t \'$increment\' \'$filter\'\n";
+        print $OUTPUT "$command -R \'$opt_R\' -M \'$dir\' -t \'$increment\' \'$filter\'\n" if $Verbose;
+      } else {
+        print $mfh "$command -R \'$opt_R\' -M \'$dir\' -t \'$increment\'\n";
+        print $OUTPUT "$command -R \'$opt_R\' -M \'$dir\' -t \'$increment\'\n" if $Verbose;
+      }
+    }
+  }
+  close $mfh;
+  print $OUTPUT "closed the file $queuefile\n\n" if $Verbose;
+
+  # return the queue file name
+  return "$queuefile";
+} # End of sub MakeTopTalkersQueueFile
+
+#-------------------------------------------------------------------------
+sub RunTopTalkersParallel($) {
+  # This sub will deal with Top Talker preparation
+  # get the queue file name
+  my $que = shift;
+  print "Top Talkers Queue File $que\n" if $DEBUG;
+  print $OUTPUT "========================================================= Top Talkers Queue File $que\n\n";
+
+  # for now - parallel processing is disabled or code is in process so revert to previous syntax
+  print $OUTPUT "========================================================= No Parallel needed - Top Talker is asked for\n";
+  system($logcmd) unless $DEBUG;
+  print "No Parallel needed - Top Talker is asked for\n" if $DEBUG;
+  print "We would have run\n$logcmd\n\n" if $DEBUG;
+  print $OUTPUT "We would have run\n$logcmd\n\n" if $Verbose;
+  # ====================================== temporary
+  return;
+
+  # if you comment out the return above then Dual methods wil be in use for code development
+
+  # the output needs to be hidden from display here so capture it to a variable
+  @toptalkersparallelout = qx(cat $que | parallel -j +0 2>&1);
+  print $OUTPUT "========================================================= Parallel qx (cat $que | parallel -j +0) has run\n\n";
+} # End of sub RunTopTalkersParallel
+
+#-------------------------------------------------------------------------
+sub RunTopTalkersFinalPass() {
+  # Top Talker output has been captured to an array named @toptalkersparallelout
+  # We need to process that and format the output to resemble the initial request
+  print $OUTPUT "Starting a Top Talkers Final Pass\n\n" if $Verbose;
+
+  # the top n header uses 'val'
+  # ts,te,td,pr,val,fl,flP,pkt,pktP,byt,bytP,pps,bps,bpp
+  # the 5th element aka [4]
+
+  # my required variables
+  my @toparray;
+  my $flowtext;
+  my $sumvals;
+  my $headtext;
+
+  # Process the contents of @toptalkersparallelout
+
+  # read the data, 
+  # consolidate and aggregate common items, 
+  # put in order by bytes, 
+  # reduce the final count of items to match the -n request
+  # and output the result
+
+  # output final data to NNA
+  foreach my $row (@toptalkersparallelout) {
+    chomp $row;
+    # header text
+    if ($row =~ m/^ts/) {
+      $headtext = $row; 
+    }
+    # Date stamp formatting
+    # This is the data that needs special processing
+    elsif ($row =~ m/^(\d\d\d\d)-(\d\d)-(\d\d)/) {
+      push (@toparray, $row);
+    }
+    # Summary text
+    elsif ($row =~ m/^flows/) {
+      $flowtext = $row; 
+    }
+    # Summary values
+    elsif ($row =~ m/\d+/) {
+      $sumvals = $row; 
+    }
+  }
+
+  # Once toparray is processed send the expected output to NNA
+    
+  print $OUTPUT "$headtext\n" if $Verbose;
+
+  # Temporary.............................................
+  # in this shape "$ts,$te,$td,$pr,$val,$fl,$flP,$pkt,$pktP,$byt,$bytP,$pps,$bps,$bpp\n";
+  # loop thru array and print output for the opt_n lines requested
+  # print the lines in the array separated by commas
+  &PrintArray(\@toparray) if $Verbose;
+
+  # provide the expected closing syntax - used or unused I do not know - but does not work without.
+  print $OUTPUT "\nSummary\n" if $Verbose;
+  print $OUTPUT "$flowtext\n" if $Verbose;
+  print $OUTPUT "$sumvals\n" if $Verbose;
+
+  print "DEBUG is on - parallel may have been run - this final pass is to run\n$command\n\n" if $DEBUG;
+  print $OUTPUT "Top Talkers output needs to be combined\n\n" if $Verbose;
+} # End of sub RunTopTalkersFinalPass
+
+# Information for Array Sort...
+# You need the cmp for strings and the spaceship for numbers:
+# my @sorted = sort { $a->[0] cmp $b->[0] || $a->[1] <=> $b->[1] } @data;
+
+
+# ===============================================================
+# ==================================== COMMON FUNCTIONS AND TOOLS
+# ===============================================================
+
+
+#-------------------------------------------------------------------------
+sub MakeIntermediateDir($) {
+  # make a directory for the intermediate nfdump binary files
+  # the NFDLOCATION variable is populated here, used here, and used elsewhere
+  my $dirtime = shift;
+  $NFDLOCATION = $TMPDIR . "nfd." . $dirtime . "/";
+  print $OUTPUT "Using $TMPDIR to create an Intermediate directory $NFDLOCATION\n\n" if $Verbose;
+  print "Intermediate directory will be $NFDLOCATION\n" if $DEBUG;
+
+  if (-e $NFDLOCATION) {
+    print $OUTPUT "Existing Intermediate directory $NFDLOCATION is available\n\n" if $Verbose;
+  } else {
     make_path($NFDLOCATION, { mode => 0755 });
-    print $OUTPUT "Using $TMPDIR as an  Intermediate directory for $NFDLOCATION\n\n" if $Verbose;
-
-    print "Intermediate directory is $NFDLOCATION\n" if $DEBUG;
+    # test for success
     if (! -e $NFDLOCATION) {
       print $OUTPUT "Intermediate directory $NFDLOCATION is NOT available\n\n" if $Verbose;
     } else {
       print $OUTPUT "Intermediate directory $NFDLOCATION is available\n\n" if $Verbose;
     }
   }
-  # Add any other pre process syntax or necessary steps here before the queue file is created
-  print $OUTPUT "End of PreProcess\n\n" if $Verbose;
-}
+  print $OUTPUT "End of MakeIntermediateDir\n\n" if $Verbose;
+} # End of sub MakeIntermediateDir
 
 #-------------------------------------------------------------------------
-sub MakeQueueFile() {
-  my $extendparam = "";
-  # open the parallel queue file for write
-  my $queuefile = $QUEDIR . "queue." . $tstamp;
-  print $OUTPUT "Queue File counter starts at $counter data will be written to $queuefile\n\n";
-  open(my $mfh, '>', "$queuefile") or print $OUTPUT "Oops, we cannot open the queue file here - $queuefile $!\n";
-  print $OUTPUT "Queue File open for writing $queuefile\n\n";
-  # iterate the arrays and write to the queue file
-  foreach my $dir (@DirList) {
-    foreach my $increment (@TimeList) {
-      # if we can use an intermediate directory - then make up incremental file names
-      if ($useoutfile eq "true") {
-        my $filecounter = sprintf("%04d", $counter);
-        $extendparam = "-w \'" . $NFDLOCATION . "nfdfile." . $tstamp . "-" . $filecounter . "\'";
-        $counter++;
-      }
-      if ($filter) {
-        print $mfh "$command $extendparam -R \'$opt_R\' -M \'$dir\' -t \'$increment\' \'$filter\'\n";
-        print $OUTPUT "$command $extendparam -R \'$opt_R\' -M \'$dir\' -t \'$increment\' \'$filter\'\n\n" if $Verbose;
-      } else {
-        print $mfh "$command $extendparam -R \'$opt_R\' -M \'$dir\' -t \'$increment\'\n";
-        print $OUTPUT "$command $extendparam -R \'$opt_R\' -M \'$dir\' -t \'$increment\'\n\n" if $Verbose;
-      }
-    }
+sub TestIntermediateDir($) {
+  # use the time stamp and see if the location already exists
+  my $dirtime = shift;
+  my $test = $TMPDIR . "nfd." . $dirtime . "/";
+
+  # Test and return true or false
+  if (-e $test) {
+    print $OUTPUT "Existing Intermediate directory $test is available\n\n" if $Verbose;
+    return "true";
+  } else {
+    print $OUTPUT "Intermediate directory $test does not exist\n\n" if $Verbose;
+    return "false";
   }
-  close $mfh;
-  print $OUTPUT "closed the file $queuefile\n\n" if $Verbose;
-  # return the queue file name
-  return "$queuefile";
-}
+} # End of sub TestIntermediateDir
 
-#-------------------------------------------------------------------------
-sub printfile($) {
-  my $filename = shift;
-  open(my $pfh, '<', $filename)
-    or print $OUTPUT "Could not open the parallel queue file '$filename' $!";
-  while (my $row = <$pfh>) {
-    chomp $row;
-    print "$row\n";
-  }
-  close $pfh;
-}
-
-#-------------------------------------------------------------------------
-sub runparallel($) {
-  # This sub will prepare files for the Final Pass. It should have no STDOUT
-  # queue file name
-  my $que = shift;
-  print "Parallel is Processing Queue File $que\n" if $DEBUG;
-  print $OUTPUT "Parallel is Processing Queue File $que\n\n";
-  #exec(cat $que | parallel -j +0) unless $DEBUG;
-  # the output needs to be hidden from display here so capture it to a variable
-  #my $parallelout = `cat $que | parallel -j +0`;
-  my $parallelout = qx(cat $que | parallel -j +0 2>&1);
-  print $OUTPUT "Parallel qx (cat $que | parallel -j +0) has run\n\n";
-}
-
-#-------------------------------------------------------------------------
-sub runFinalPass() {
-  # if we used the intermediate directory, then all our stuff is cached there waiting to display for NNA
-  # we just need to run nfdump a special way. so lets do that by getting the command syntax correctly set.
-  print $OUTPUT "Starting a Final Pass\n\n" if $Verbose;
-  if ($useoutfile eq "true") {
-    if ($opt_c) {
-      $command .= " -c \'$opt_c\'";
-    }
-    if ($filter) {
-      $command .= " -R \'.\' -M \'$NFDLOCATION\' -t \'$opt_t\' \'$filter\'";
-    } else {
-      $command .= " -R \'.\' -M \'$NFDLOCATION\' -t \'$opt_t\'";
-    }
-    # run the command and let the output go to NNA
-    print $OUTPUT "Running special nfdump to aggregate Intermediate file data\n";
-    print $OUTPUT "Running syntax is\n$command\n\n";
-    system($command);
-    print "DEBUG is on - parallel may have been run - this final pass is to run\n$command\n\n" if $DEBUG;
-    print $OUTPUT "Intermediate file data has been run\n\n" if $Verbose;
-  }
-}
 #-------------------------------------------------------------------------
 sub RunCleanup() {
-  #return;
-  
+  # Add a slight delay and allow files to finish any activity that may still be running
+  # ========================================================================================================= <=== Need work here SLB
+  # Modify entire sub to look for files and dir older than 30 minutes
+  # $QUEDIR $TMPDIR $LOGDIR
+  sleep(2);
   {
+    # to start over clean
+    #remove_tree($TMPDIR);
+    # to run normal
     remove_tree($NFDLOCATION);
-    print $OUTPUT "removed intermediate location " . $NFDLOCATION  . "\n";
+    print $OUTPUT "removed intermediate location " . $NFDLOCATION  . "\n" if $Verbose;
   }
 
   {
@@ -744,17 +885,123 @@ sub RunCleanup() {
     #my $basefile = "queue.*";
     # to delete just the queue file we just made
     my $basefile = "queue." . $tstamp;
-    print $OUTPUT "The file prefix for deletion is " . $basefile  . "\n";
+    print $OUTPUT "The file for deletion is " . $basefile  . "\n" if $Verbose;
     my @queuelist=<"$basefile">;
     foreach my $del (@queuelist) {
       unlink $del;
       $ctr++;
       print $OUTPUT "Deleted the " . $del  . " file\n" if $Verbose;
     }
-    print $OUTPUT "Removed  " . $ctr  . " files\n";
+    print $OUTPUT "Removed  " . $ctr  . " files\n" if $Verbose;
   }
+} # End of sub RunCleanup
 
-}
+#-------------------------------------------------------------------------
+sub PrintFile($) {
+  my $filename = shift;
+  open(my $pfh, '<', $filename)
+    or print $OUTPUT "========================================================= Could not open the parallel queue file '$filename' $!";
+  while (my $row = <$pfh>) {
+    chomp $row;
+    print "$row\n";
+  }
+  close $pfh;
+} # End of sub PrintFile
+
+#-------------------------------------------------------------------------
+sub PrintArray(@) {
+  my @array = @{$_[0]};
+  foreach (@array) {
+    print $OUTPUT $_ . "\n";
+  }
+} # End of sub PrintArray
+
+#-------------------------------------------------------------------------
+sub EpochToT($) {
+  my $toconvert = shift;
+  my ($sec,$min,$hour,$day,$month,$year) = localtime($toconvert);
+  # correct the yar for humans
+  $year = 1900 + $year;
+  # Format for nfdump
+  my $date = sprintf "%04d/%02d/%02d.%02d:%02d:%02d", $year, $month, $day, $hour, $min, $sec;
+  return $date;
+} # End of sub EpochToT
+
+# -----------------------------------------------------------------
+sub TimeToArray() {
+  my @results;
+  my $onehour = "3600"; # in seconds
+  if (! $interval) {
+    # Something is wrong up top so lets use 3
+    $interval = 3;
+  }
+  # add a delay for processing the last time period. if it is small then combine it with the previous time period.
+  #my $convdelay = "900"; # in seconds is 15 minutes
+  #my $convdelay = "600"; # set to 10 minutes in seconds
+  my $convdelay = "300"; # set to 10 minutes in seconds
+  # Set number to increment by
+  my $skip = $interval * $onehour;
+
+  # -t '2017/06/27.11:42:51-2017/06/27.15:42:50'
+  # take the -t parameter $opt_t and separate the start from the end
+  my ($start,$end) = split("-", $opt_t);
+
+  # Separate the elements
+  my ($syear,$smonth,$sday,$shour,$sminute,$ssecond) = split /[\/\.:]/, $start;
+  my ($eyear,$emonth,$eday,$ehour,$eminute,$esecond) = split /[\/\.:]/, $end;
+
+  # Convert to Epoch
+  my $initialstart = timelocal($ssecond,$sminute,$shour,$sday,$smonth,$syear);
+  my $initialend = timelocal($esecond,$eminute,$ehour,$eday,$emonth,$eyear);
+
+  # make working times for the loop
+  my $workingstart = $initialstart;
+  my $workingend = $initialstart + $skip;
+  # Start loop to step through time intervals
+  do {
+    # Convert Epoch to -t format
+    my $displaystart = &EpochToT($workingstart);
+    my $displayend = &EpochToT($workingend);
+    # Do not exceed the original end time - first time through the loop
+    if ($workingend > $initialend) {
+      push (@results, $displaystart . "-" . $end);
+    # This will be the most used section - but - special case is if the final time is a very small interval
+    # try to not have a very small time period at the end - combine it with the previos time instead
+    } elsif ($workingend + $skip + $convdelay < $initialend) {
+      push (@results, $displaystart . "-" . $displayend);
+    # seems like we must be finished so close off the last time period
+    } else {
+      push (@results, $displaystart . "-" . $end);
+    }
+    $workingstart = $workingend + 1;
+    $workingend += $skip;
+  } while ($initialend > $workingend);
+  print $OUTPUT "Completed the time range expansion\n\n" if $Verbose;
+  return @results;
+} # End of sub TimeToArray
+
+# -----------------------------------------------------------------
+sub DirToArray() {
+  # take the -M parameter $opt_M and return an array of directories
+  my @dirlist = split(":", $opt_M);
+  my @results;
+  #
+  # remember the first dir as that is the fully qualified one
+  # There is no need to process it as it is absolute already
+  my $base = shift @dirlist;
+  push (@results, $base);
+  #
+  # Loop through the rest of the array and convert relative to absolute
+  foreach my $dir (@dirlist) {
+    my $path = $base . $dir;
+    my $newpath = abs_path($path) . "/";
+    push (@results, $newpath);
+  }
+  #
+  print $OUTPUT "Completed the directory expansion\n\n" if $Verbose;
+  return @results;
+} # End of sub DirToArray
+
 
 #-------------------------------------------------------------------------
 # end of code
