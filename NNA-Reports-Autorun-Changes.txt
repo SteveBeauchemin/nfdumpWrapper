@@ -1,3 +1,5 @@
+Nagios Network Analyzer - Minor improvements
+
 When clicking a menu to get to the reports tab, the currently selected item will automatically run before you have a chance to change the menu item to the report you actually want to see.
 
 This change will change the default such that you need to click the run button.

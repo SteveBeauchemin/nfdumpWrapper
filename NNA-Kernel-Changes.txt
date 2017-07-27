@@ -1,3 +1,5 @@
+Nagios Network Analyzer - Minor improvements
+
 In order to support flows and provide resources, the following kernel changes are required.
 Some are set by the installation, I increased one since then.
 

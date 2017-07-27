@@ -1,3 +1,4 @@
+Nagios Network Analyzer - Minor improvements
 
 Changes to add more time interval choices
 

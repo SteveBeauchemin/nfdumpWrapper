@@ -1,3 +1,4 @@
+Nagios Network Analyzer - Minor improvements
 
 Make the Nagios XI integrated component faster by changing the default display from 24 hours (Slow) to 2 hours (Fast)
 
