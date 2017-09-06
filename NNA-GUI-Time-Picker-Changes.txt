@@ -135,6 +135,7 @@ diff OriginalFiles/reports.php NewFiles-2017-07-19/reports.php
 diff OriginalFiles/summary.php NewFiles-2017-09-06/summary.php
 40a41
 >     // SLB 2017-07-19 Change refresh to larger time - some reports just finish loading just as refresh sharts
+>     // SLB 2017-09-06 Change refresh default to one hour
 42c43,49
 <     setInterval(function() { reload_visuals(); }, 300000);
 ---
