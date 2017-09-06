@@ -132,18 +132,20 @@ diff OriginalFiles/reports.php NewFiles-2017-07-19/reports.php
 
 
 =============================================
-diff OriginalFiles/summary.php NewFiles-2017-07-19/summary.php
+diff OriginalFiles/summary.php NewFiles-2017-09-06/summary.php
 40a41
 >     // SLB 2017-07-19 Change refresh to larger time - some reports just finish loading just as refresh sharts
-42c43,47
+42c43,49
 <     setInterval(function() { reload_visuals(); }, 300000);
 ---
 >     // setInterval(function() { reload_visuals(); }, 300000);
 >     // Have the graph  & top talkers load fresh every 10 minutes
 >     // setInterval(function() { reload_visuals(); }, 600000);
 >     // Have the graph  & top talkers load fresh every 15 minutes
->     setInterval(function() { reload_visuals(); }, 900000);
-91a97,100
+>     // setInterval(function() { reload_visuals(); }, 900000);
+>     // Have the graph  & top talkers load fresh every 1 hour
+>     setInterval(function() { reload_visuals(); }, 3600000);
+91a99,102
 >                     <option value="-2 hours|-1 second"><?php echo lang('timerange_2hrs'); ?></option>
 >                     <option value="-4 hours|-1 second"><?php echo lang('timerange_4hrs'); ?></option>
 >                     <option value="-6 hours|-1 second"><?php echo lang('timerange_6hrs'); ?></option>
